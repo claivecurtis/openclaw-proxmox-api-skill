@@ -177,7 +177,7 @@ def load_client():
     with open(token_path, 'r') as f:
         token = f.read().strip()
     
-    host = config.get('host')
-    verify_ssl = config.get('verify_ssl', True)
+    host = config['proxmox'].get('host')
+    verify_ssl = config['proxmox'].get('verify_ssl', True)
     
     return ProxmoxClient(host, token, verify_ssl)

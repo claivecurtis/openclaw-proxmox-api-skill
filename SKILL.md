@@ -1,0 +1,59 @@
+# OpenClaw Proxmox API Skill
+
+## Overview
+This skill provides integration with Proxmox Virtual Environment (PVE) API for managing virtual machines, containers, nodes, and cluster resources. It uses the REST API with token-based authentication for secure remote management.
+
+## Triggers
+Use this skill when the user mentions:
+- "proxmox" or "pve"
+- VM/cluster management tasks like "list VMs", "start VM", "stop VM", "migrate VM", "create VM", "snapshot VM", "backup VM"
+- Monitoring cluster status or resources
+- Power management for VMs/LXCs
+
+## Usage
+Load the skill by reading this file and the scripts/client.py. The main interface is through Python scripts in the `scripts/` directory.
+
+### Prerequisites
+1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
+2. Store token in `workspace/secrets/pve-token.txt`.
+3. Configure `assets/config.yaml` with cluster details.
+
+### Workflows
+
+#### List VMs/Nodes
+- **Script:** `scripts/client.py` `list_vms()`
+- **Description:** Retrieves all VMs and LXCs in the cluster.
+- **Output:** List of dicts with id, name, node, status, type, etc.
+
+#### VM Power Management
+- **Script:** `scripts/client.py` `vm_action(node, vmid, action)`
+- **Actions:** start, stop, reboot, shutdown, suspend, resume
+- **Description:** Performs power actions on a specific VM. Asynchronous actions return UPID and require polling.
+- **Safety:** Destructive actions (stop, reset) require confirmation.
+
+#### Task Polling
+- **Script:** `scripts/client.py` `poll_task(node, upid)`
+- **Description:** Monitors asynchronous tasks until completion.
+- **Timeout:** Default 300s, poll every 5s.
+
+#### Advanced Operations (Planned)
+- VM creation from templates
+- Snapshots and backups
+- Migration
+- Cluster monitoring
+
+### Error Handling
+- `ProxmoxAuthError`: Authentication issues (check token/config)
+- `ProxmoxAPIError`: API errors (permissions, invalid params)
+- `TaskTimeoutError`: Async tasks exceed timeout
+
+### Integration with OpenClaw
+- Use `exec` to run Python scripts for API calls.
+- Spawn `subagents` for long-running tasks (backups, migrations).
+- Send notifications via `message` tool for monitoring alerts.
+
+## Dependencies
+See `requirements.txt` for Python packages.
+
+## Testing
+Run `pytest` in the skill directory for unit tests with mocks.

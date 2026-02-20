@@ -6,14 +6,52 @@ Proxmox VE API integration for OpenClaw agents.
 - Cluster/node/VM management
 - Resource queries/monitoring
 - Power ops (start/stop/reboot/migrate)
+- Async task polling
+- Secure token-based authentication
+
+## Setup
+1. Create API token in Proxmox for a user with permissions: VM.Audit, VM.PowerMgmt, VM.Console, VM.Backup, VM.Snapshot, Datastore.Audit, Sys.Audit.
+2. Store token in `workspace/secrets/pve-token.txt`.
+3. Configure `assets/config.yaml` with cluster host and SSL settings.
 
 ## Usage
-Load via skill system: read skill path.
+Load via skill system: read `SKILL.md` and use scripts in `scripts/`.
 
-See:
-- [proxmox-api-requirements.md](proxmox-api-requirements.md)
-- [proxmox-reqs.md](proxmox-reqs.md)
-- scripts/
+See [SKILL.md](SKILL.md) for triggers and workflows.
+
+### Examples
+Run example scripts in `examples/`:
+- `python examples/list_vms.py` - List all VMs/LXCs
+- `python examples/vm_start.py node1 101` - Start VM 101 on node1
+
+### API Endpoints (Initial Scope)
+| Function | Method | Path |
+| :--- | :--- | :--- |
+| Cluster Status | GET | `/cluster/status` |
+| Resources List | GET | `/cluster/resources` |
+| Node Stats | GET | `/nodes/{node}/status` |
+| VM/LXC List | GET | `/nodes/{node}/qemu` or `/nodes/{node}/lxc` |
+| VM Status | GET | `/nodes/{node}/qemu/{vmid}/status/current` |
+| Power Actions | POST | `/nodes/{node}/qemu/{vmid}/status/{start,stop,reset,shutdown,suspend,resume}` |
+| Snapshots | POST/GET | `/nodes/{node}/qemu/{vmid}/snapshot` |
+| Task Status | GET | `/nodes/{node}/tasks/{upid}/status` |
+
+### Authentication
+- Primary: API Tokens (`PVEAPIToken` header)
+- Header: `Authorization: PVEAPIToken=USER@REALM!TOKENID=UUID`
+- SSL: Verifies by default, configurable in config.yaml
+
+### Async Handling
+Operations return UPID; poll `/nodes/{node}/tasks/{upid}/status` until `status: stopped`.
+
+### Safety
+Destructive actions require confirmation.
+
+## Dependencies
+See `requirements.txt`.
+
+## Testing
+`pytest` in tests/ directory.
 
 ## Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)

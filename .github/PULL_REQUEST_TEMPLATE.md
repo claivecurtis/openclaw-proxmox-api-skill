@@ -9,13 +9,21 @@ Brief description of the changes.
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Documentation update
+- [ ] Refactoring
 - [ ] Other
 
 ## Checklist
 
-- [ ] Tests pass
+- [ ] Tests pass (`pytest`)
+- [ ] Linting passes (`flake8` or similar)
 - [ ] Documentation updated
 - [ ] Code follows project standards
+- [ ] Dependencies updated in `requirements.txt` if needed
+- [ ] Examples/scripts tested manually
+
+## Testing
+
+Describe how the changes were tested.
 
 ## Additional Notes
 
