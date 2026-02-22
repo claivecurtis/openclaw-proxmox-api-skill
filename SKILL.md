@@ -15,8 +15,8 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 ### Prerequisites
 1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
-2. Store token in `../../secrets/pve-token.txt`.
-3. cp assets/config.proxmox.example.yaml ../../secrets/config.proxmox.yaml && edit
+2. Store token in `workspace/secrets/pve-token.txt`.
+3. `cp assets/config.proxmox.example.yaml workspace/secrets/config.proxmox.yaml && edit`
 
 ### Workflows
 
@@ -49,9 +49,16 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - `TaskTimeoutError`: Async tasks exceed timeout
 
 ### Integration with OpenClaw
+- **MANDATORY:** All `exec` calls MUST set `workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill"` (fixes relative secrets paths from Discord/root cwd).
 - Use `exec` to run Python scripts for API calls.
 - Spawn `subagents` for long-running tasks (backups, migrations).
 - Send notifications via `message` tool for monitoring alerts.
+
+**Example (auth test + list top VMs):**
+```
+exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Host:\", c.host); print(\"VMs:\", [vm[\\\"name\\\"] for vm in c.list_vms()[:3]])'"
+```
+Expected: `Host: 10.0.0.12` + VM names (auth OK).
 
 ## Dependencies
 See `requirements.txt` for Python packages.
