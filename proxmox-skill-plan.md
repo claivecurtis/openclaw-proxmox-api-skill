@@ -73,6 +73,43 @@ Detailed workflows for common tasks, with error recovery and user interaction:
 - **Data Loss**: Accidental deletes. Mitigation: Confirmations, backups before destructive ops.
 - **Resource Exhaustion**: Over-provisioning. Mitigation: Monitor via cron, set limits in workflows.
 
+## PBS Integration
+
+- **PBS Client:** Separate PBSClient class for Proxmox Backup Server API (port 8007).
+- **Backup to PBS:** Methods to initiate backups to PBS datastores.
+- **Datastore Management:** List and manage PBS datastores.
+
+## Resource Pools Management
+
+- **List Pools:** Retrieve resource pools (/pools).
+- **Create Pool:** Create new resource pools with comments.
+- **Pool Assignment:** Future: Assign VMs to pools.
+
+## Security Enhancements
+
+- **Token Rotation:** Automate token updates via API.
+- **Audit Logging:** Log all API calls with sanitization.
+- **Principle of Least Privilege:** Dedicated API users per function.
+
+## Public General API
+
+- **Open Source Release:** Make the skill public under MIT license.
+- **Documentation:** Comprehensive README with examples.
+- **Community Contributions:** Issue/PR templates, CoC, Security policy.
+
+## Todo/Features Table
+
+| Phase | Milestone | Features | Status |
+|-------|-----------|----------|--------|
+| 1 | Core API | ProxmoxClient with auth, list_vms, vm_action, poll_task | ✅ Complete |
+| 2 | Backup/Migrate | vm_backup (snapshot), vm_migrate, PBSClient, backup_vm to PBS | ✅ Complete |
+| 3 | Pools | list_storage_pools, list_resource_pools, create_resource_pool | ✅ Complete |
+| 4 | Testing | Unit tests with mocks, CI for test/lint/security | ✅ Complete |
+| 5 | CI/CD | GitHub Actions for CI, Dependabot for deps, CodeQL for security | ✅ Complete |
+| 6 | Workflows | Orchestration scripts for complex ops | Planned |
+| 7 | Public Release | Update docs, OSS templates, PR for public | In Progress |
+| 8 | Advanced Features | Monitoring, HA, Ceph integration | Future |
+
 ## Thoughts
 
 **Strengths:**
@@ -97,7 +134,7 @@ Detailed workflows for common tasks, with error recovery and user interaction:
 - **SKILL.md:** Trigger: \"proxmox\", \"pve\", VM/cluster mgmt.
   Workflows: List nodes/VMs, power, snapshot, backup, migrate, create.
 
-- **scripts/client.py:** Python API client (requests, auth token, common methods: list_vms, vm_action). Includes async task polling, error handling.
+- **scripts/client.py:** Python API client (requests, auth token, common methods: list_vms, vm_action). Includes async task polling, error handling. PBSClient for backup server.
 
 - **scripts/workflows.py:** Orchestrates complex operations with retries and confirmations.
 
@@ -107,7 +144,7 @@ Detailed workflows for common tasks, with error recovery and user interaction:
 
 - **assets/config.yaml:** User configs (endpoint, token path, defaults).
 
-- **tests/test_client.py:** Unit tests.
+- **tests/test_client.py:** Unit tests for all methods.
 
 **Setup:**
 1. User adds token to workspace/secrets/pve-token.txt
@@ -115,4 +152,4 @@ Detailed workflows for common tasks, with error recovery and user interaction:
 3. Test auth: GET /version
 4. Common: `sessions_spawn agentId=proxmox task=\"list VMs on node1\"`
 
-**Next:** Create draft SKILL.md + client.py + workflows.py. Review for integration.
+**Next:** Finalize workflows, public release PRs.

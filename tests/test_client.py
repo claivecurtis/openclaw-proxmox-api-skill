@@ -6,7 +6,7 @@ import os
 # Add scripts directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from client import ProxmoxClient, ProxmoxAuthError, ProxmoxAPIError, TaskTimeoutError
+from client import ProxmoxClient, PBSClient, ProxmoxAuthError, ProxmoxAPIError, TaskTimeoutError
 
 class TestProxmoxClient:
 
@@ -147,3 +147,107 @@ class TestProxmoxClient:
             with patch('time.time', side_effect=[0, 300, 301]):
                 with pytest.raises(TaskTimeoutError, match="Task upid123 timed out"):
                     client.poll_task('node1', 'upid123', timeout=300)
+
+    @patch('client.requests.Session')
+    def test_list_storage_pools(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'data': [
+                {'type': 'storage', 'id': 'local'},
+                {'type': 'storage', 'id': 'nfs'},
+                {'type': 'node', 'id': 'node1'}
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        pools = client.list_storage_pools()
+
+        assert len(pools) == 2
+        assert pools[0]['id'] == 'local'
+        assert pools[1]['id'] == 'nfs'
+
+    @patch('client.requests.Session')
+    def test_list_resource_pools(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'data': [
+                {'poolid': 'pool1', 'comment': 'Test pool'},
+                {'poolid': 'pool2'}
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        pools = client.list_resource_pools()
+
+        assert len(pools) == 2
+        assert pools[0]['poolid'] == 'pool1'
+
+    @patch('client.requests.Session')
+    def test_create_resource_pool(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        client.create_resource_pool('newpool', 'Test pool')
+
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/pools', json={'poolid': 'newpool', 'comment': 'Test pool'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_pbs_init_success(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'version'}
+        mock_session.get.return_value = mock_response
+
+        client = PBSClient('pbs.example.com', 'token123', True)
+
+        assert client.host == 'pbs.example.com'
+        mock_session.get.assert_called_with('https://pbs.example.com:8007/api2/json/version', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_pbs_list_datastores(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'store1'},
+                {'id': 'store2'}
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = PBSClient('pbs.example.com', 'token123', True)
+        datastores = client.list_datastores()
+
+        assert len(datastores) == 2
+        assert datastores[0]['id'] == 'store1'
+
+    @patch('client.requests.Session')
+    def test_pbs_backup_vm(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:pbs:00000001:00000002:00000003:backup:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = PBSClient('pbs.example.com', 'token123', True)
+        upid = client.backup_vm('store1', 101, 'node1')
+
+        assert upid == 'UPID:pbs:00000001:00000002:00000003:backup:'
+        mock_session.post.assert_called_with('https://pbs.example.com:8007/api2/json/datastore/store1/backup', json={'id': 'node1/101', 'type': 'vm'}, verify=True, timeout=30)

@@ -124,6 +124,54 @@ class ProxmoxClient:
             logger.error(f"Failed to perform VM action '{action}' on {vmid}: {e}")
             raise
 
+    def list_storage_pools(self):
+        """
+        List storage pools in the cluster.
+
+        :return: List of storage pool dictionaries
+        """
+        try:
+            resources = self._get('/cluster/resources')
+            pools = [r for r in resources['data'] if r['type'] == 'storage']
+            logger.info(f"Retrieved {len(pools)} storage pools")
+            return pools
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list storage pools: {e}")
+            raise
+
+    def list_resource_pools(self):
+        """
+        List resource pools in the cluster.
+
+        :return: List of resource pool dictionaries
+        """
+        try:
+            pools = self._get('/pools')
+            logger.info(f"Retrieved {len(pools['data'])} resource pools")
+            return pools['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list resource pools: {e}")
+            raise
+
+    def create_resource_pool(self, poolid, comment=''):
+        """
+        Create a new resource pool.
+
+        :param poolid: Pool ID
+        :param comment: Optional comment
+        :return: None
+        """
+        path = f'/pools'
+        data = {'poolid': poolid}
+        if comment:
+            data['comment'] = comment
+        try:
+            self._post(path, data)
+            logger.info(f"Resource pool '{poolid}' created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create resource pool '{poolid}': {e}")
+            raise
+
     def poll_task(self, node, upid, timeout=300, poll_interval=5):
         """
         Poll a task until completion.
@@ -162,6 +210,118 @@ class ProxmoxClient:
             except ProxmoxAPIError:
                 raise
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
+
+class PBSClient(ProxmoxClient):
+    """
+    Client for Proxmox Backup Server (PBS) API.
+    Inherits from ProxmoxClient but uses port 8007.
+    """
+    def __init__(self, host, token, verify_ssl=True):
+        """
+        Initialize the PBS API client.
+
+        :param host: PBS host (e.g., 'pbs.example.com')
+        :param token: API token
+        :param verify_ssl: Whether to verify SSL certificates
+        """
+        self.host = host
+        self.token = token
+        self.verify_ssl = verify_ssl
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'PVEAPIToken={token}',
+            'Content-Type': 'application/json'
+        })
+        # Test authentication
+        try:
+            self._get('/version')
+            logger.info("PBS Authentication successful")
+        except requests.exceptions.RequestException as e:
+            raise ProxmoxAuthError(f"PBS Authentication failed: {e}")
+
+    def _get(self, path, params=None):
+        """
+        Perform a GET request to the PBS API.
+
+        :param path: API path
+        :param params: Optional query parameters
+        :return: JSON response data
+        """
+        url = f"https://{self.host}:8007/api2/json{path}"
+        try:
+            resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.Timeout:
+            raise ProxmoxAPIError("PBS Request timed out")
+        except requests.exceptions.SSLError:
+            raise ProxmoxAPIError("PBS SSL verification failed")
+        except requests.exceptions.HTTPError as e:
+            raise ProxmoxAPIError(f"PBS HTTP {e.response.status_code}: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            raise ProxmoxAPIError(f"PBS Request failed: {e}")
+
+    def _post(self, path, data=None):
+        """
+        Perform a POST request to the PBS API.
+
+        :param path: API path
+        :param data: JSON data to send
+        :return: JSON response data
+        """
+        url = f"https://{self.host}:8007/api2/json{path}"
+        try:
+            resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.Timeout:
+            raise ProxmoxAPIError("PBS Request timed out")
+        except requests.exceptions.SSLError:
+            raise ProxmoxAPIError("PBS SSL verification failed")
+        except requests.exceptions.HTTPError as e:
+            raise ProxmoxAPIError(f"PBS HTTP {e.response.status_code}: {e.response.text}")
+        except requests.exceptions.RequestException as e:
+            raise ProxmoxAPIError(f"PBS Request failed: {e}")
+
+    def list_datastores(self):
+        """
+        List datastores on the PBS server.
+
+        :return: List of datastore dictionaries
+        """
+        try:
+            datastores = self._get('/config/datastore')
+            logger.info(f"Retrieved {len(datastores['data'])} datastores")
+            return datastores['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list datastores: {e}")
+            raise
+
+    def backup_vm(self, datastore, vmid, node, backup_type='vm', **kwargs):
+        """
+        Initiate a backup of a VM to PBS.
+
+        :param datastore: PBS datastore
+        :param vmid: VM ID
+        :param node: Node name
+        :param backup_type: Backup type ('vm', 'ct')
+        :param kwargs: Additional parameters
+        :return: UPID of the backup task
+        """
+        path = f'/datastore/{datastore}/backup'
+        data = {
+            'id': f'{node}/{vmid}',
+            'type': backup_type,
+            **kwargs
+        }
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"Backup of {backup_type} {vmid} to datastore {datastore} initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to backup {backup_type} {vmid}: {e}")
+            raise
 
 # Utility function to load client from config (assumes assets/config.yaml and secrets/pve-token.txt exist)
 def load_client():
