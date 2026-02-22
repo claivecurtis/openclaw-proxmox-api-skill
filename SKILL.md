@@ -49,7 +49,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - `TaskTimeoutError`: Async tasks exceed timeout
 
 ### Integration with OpenClaw
-- **MANDATORY:** All `exec` calls MUST set `workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill"` (fixes relative secrets paths from Discord/root cwd).
+- All `exec` calls should set `workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill"` for proper module imports.
 - Use `exec` to run Python scripts for API calls.
 - Spawn `subagents` for long-running tasks (backups, migrations).
 - Send notifications via `message` tool for monitoring alerts.
