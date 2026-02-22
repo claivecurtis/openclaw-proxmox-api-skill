@@ -323,9 +323,9 @@ class PBSClient(ProxmoxClient):
             logger.error(f"Failed to backup {backup_type} {vmid}: {e}")
             raise
 
-# Utility function to load client from config (assumes assets/config.yaml and secrets/pve-token.txt exist)
+# Utility function to load client from config (assumes ../../secrets/config.proxmox.yaml and ../../secrets/pve-token.txt exist)
 def load_client():
-    config_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'config.yaml')
+    config_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'secrets', 'config.proxmox.yaml')
     token_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'secrets', 'pve-token.txt')
     
     # Load config

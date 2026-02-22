@@ -15,8 +15,8 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 ### Prerequisites
 1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
-2. Store token in `workspace/secrets/pve-token.txt`.
-3. Configure `assets/config.yaml` with cluster details.
+2. Store token in `../../secrets/pve-token.txt`.
+3. cp assets/config.proxmox.example.yaml ../../secrets/config.proxmox.yaml && edit
 
 ### Workflows
 
