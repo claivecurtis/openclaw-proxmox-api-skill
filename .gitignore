@@ -27,4 +27,4 @@ Thumbs.db
 *.log
 
 # Secrets (do not commit)
-secrets/assets/config.yaml
+secrets/

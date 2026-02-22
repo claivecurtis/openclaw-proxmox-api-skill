@@ -15,8 +15,9 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 ### Prerequisites
 1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
-2. Store token in `workspace/secrets/pve-token.txt`.
-3. `cp assets/config.proxmox.example.yaml workspace/secrets/config.proxmox.yaml && edit`
+2. Set `OPENCLAW_WORKSPACE` environment variable to your OpenClaw workspace path (optional, defaults to relative path).
+3. Store token in `workspace/secrets/pve-token.txt`.
+4. `cp assets/config.proxmox.example.yaml workspace/secrets/config.proxmox.yaml && edit`
 
 ### Workflows
 

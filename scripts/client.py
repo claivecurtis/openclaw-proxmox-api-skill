@@ -368,10 +368,11 @@ class PBSClient(ProxmoxClient):
             logger.error(f"Failed to backup {backup_type} {vmid}: {e}")
             raise
 
-# Utility function to load client from config (assumes /home/claw/.openclaw/workspace/secrets/config.proxmox.yaml and /home/claw/.openclaw/workspace/secrets/pve-token.txt exist)
+# Utility function to load client from config
 def load_client():
-    config_path = '/home/claw/.openclaw/workspace/secrets/config.proxmox.yaml'
-    token_path = '/home/claw/.openclaw/workspace/secrets/pve-token.txt'
+    workspace = os.getenv('OPENCLAW_WORKSPACE', os.path.dirname(os.path.dirname(__file__)))
+    config_path = os.path.join(workspace, 'secrets', 'config.proxmox.yaml')
+    token_path = os.path.join(workspace, 'secrets', 'pve-token.txt')
     
     # Load config
     import yaml
