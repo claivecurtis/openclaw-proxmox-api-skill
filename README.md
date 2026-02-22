@@ -15,7 +15,7 @@ Proxmox VE API integration for OpenClaw agents.
 ## Setup
 1. Create API token in Proxmox for a user with permissions: VM.Audit, VM.PowerMgmt, VM.Console, VM.Backup, VM.Snapshot, Datastore.Audit, Sys.Audit.
 2. Store token in `workspace/secrets/pve-token.txt`.
-3. Configure `assets/config.yaml` with cluster host and SSL settings.
+3. cp assets/config.example.yaml assets/config.yaml && edit your host/token path/SSL.
 
 ## Usage
 Load via skill system: read `SKILL.md` and use scripts in `scripts/`.
