@@ -36,10 +36,11 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - **Description:** Monitors asynchronous tasks until completion.
 - **Timeout:** Default 300s, poll every 5s.
 
-#### Advanced Operations (Planned)
+#### Advanced Operations
 - VM creation from templates
-- Snapshots and backups
-- Migration
+- Snapshots and backups (via `vm_backup`)
+- Migration (via `vm_migrate`)
+- Pool management (via `list_pools`)
 - Cluster monitoring
 
 ### Error Handling

@@ -6,6 +6,9 @@ Proxmox VE API integration for OpenClaw agents.
 - Cluster/node/VM management
 - Resource queries/monitoring
 - Power ops (start/stop/reboot/migrate)
+- VM backups and snapshots
+- Migration between nodes
+- Storage pool management
 - Async task polling
 - Secure token-based authentication
 
@@ -52,6 +55,11 @@ See `requirements.txt`.
 
 ## Testing
 `pytest` in tests/ directory.
+
+## Automation
+- **CI/CD**: GitHub Actions for testing and linting on PRs/pushes.
+- **Dependabot**: Automated dependency updates for Python packages and GitHub Actions.
+- **CodeQL**: Security scanning enabled for vulnerability detection.
 
 ## Contributing
 [CONTRIBUTING.md](CONTRIBUTING.md)
