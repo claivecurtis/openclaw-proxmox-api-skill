@@ -185,4 +185,16 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
 - `asyncio` for async operations (if needed).
 - Optional: `proxmoxer` library for reference implementation.
 
-This roadmap covers all major API endpoints based on the Proxmox VE and PBS API documentation referenced in REVIEW.md.
+This roadmap covers all major API endpoints based on the Proxmox VE and PBS API documentation.
+
+## API References
+
+### Proxmox VE (PVE)
+
+- [Proxmox VE API Wiki](https://pve.proxmox.com/wiki/Proxmox_VE_API)
+- [PVE API Viewer](https://pve.proxmox.com/pve-docs/api-viewer/)
+
+### Proxmox Backup Server (PBS)
+
+- [PBS Backup Protocol Documentation](https://pbs.proxmox.com/docs/backup-protocol.html)
+- [PBS API Viewer](https://pbs.proxmox.com/docs/api-viewer/)
