@@ -22,49 +22,57 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
 
 ### Phase 1: Core Infrastructure (Core Priority)
 
-1. **Implement Authentication**
+1. **Implement Authentication** ✅
    - Methods for ticket-based authentication (`get_ticket`, `refresh_ticket`).
    - Methods for API token authentication.
    - CSRF token handling for write operations.
    - Base HTTP client setup with SSL verification options.
 
-2. **Implement Cluster Operations**
+2. **Implement Cluster Operations** ✅
    - `cluster_status()`: Get cluster status.
    - `cluster_tasks()`: List cluster tasks.
    - `cluster_logs()`: Retrieve cluster logs.
    - `cluster_backup()`: Manage cluster backups.
 
-3. **Implement Node Operations**
+3. **Implement Node Operations** ✅
    - `node_status(node)`: Get node status.
    - `node_tasks(node)`: List node tasks.
    - `node_services(node)`: Manage node services (start/stop/restart/status).
    - `node_storage(node)`: List node storage.
 
-4. **Implement Basic VM Operations (QEMU)**
-   - `vm_list(node)`: List VMs on a node.
-   - `vm_status(vmid, node)`: Get VM status.
-   - `vm_start(vmid, node)`: Start a VM.
-   - `vm_stop(vmid, node)`: Stop a VM.
-   - `vm_reboot(vmid, node)`: Reboot a VM.
-   - `vm_shutdown(vmid, node)`: Shutdown a VM.
-   - `vm_create(node, config)`: Create a new VM.
-   - `vm_delete(vmid, node)`: Delete a VM.
-   - `vm_config_get(vmid, node)`: Get VM configuration.
-   - `vm_config_set(vmid, node, config)`: Update VM configuration.
+4. **Implement Basic VM Operations (QEMU)** ✅
+   - `vm_list(node)`: List VMs on a node. ✅ (via VM.list())
+   - `vm_status(vmid, node)`: Get VM status. ✅ (via VM.status())
+   - `vm_start(vmid, node)`: Start a VM. ✅ (via VM.start())
+   - `vm_stop(vmid, node)`: Stop a VM. ✅ (via VM.stop())
+   - `vm_reboot(vmid, node)`: Reboot a VM. ✅ (via VM.reboot())
+   - `vm_shutdown(vmid, node)`: Shutdown a VM. ✅ (via VM.shutdown())
+   - `vm_create(node, config)`: Create a new VM. ✅ (via VM.create())
+   - `vm_delete(vmid, node)`: Delete a VM. ✅ (via VM.delete())
+   - `vm_config_get(vmid, node)`: Get VM configuration. ✅ (via VM.config_get())
+   - `vm_config_set(vmid, node, config)`: Update VM configuration. ✅ (via VM.config_set())
 
-5. **Implement Basic Storage Operations**
-   - `storage_list()`: List all storage.
-   - `storage_status(storage)`: Get storage status.
-   - `storage_content(storage)`: List storage content.
-   - `storage_create(config)`: Create new storage.
-   - `storage_delete(storage)`: Delete storage.
+5. **Implement Basic Storage Operations** ✅
+   - `storage_list()`: List all storage. ✅ (via Storage.list())
+   - `storage_status(storage)`: Get storage status. ✅ (via Storage.status())
+   - `storage_content(storage)`: List storage content. ✅ (via Storage.content())
+   - `storage_create(config)`: Create new storage. ✅ (via Storage.create())
+   - `storage_delete(storage)`: Delete storage. ✅ (via Storage.delete())
 
-6. **Implement Basic Pool Operations**
-   - `pool_list()`: List all pools.
-   - `pool_members(pool)`: Get pool members.
-   - `pool_create(pool)`: Create a new pool.
-   - `pool_delete(pool)`: Delete a pool.
-   - `pool_update(pool, config)`: Update pool configuration.
+6. **Implement Basic Pool Operations** ✅
+   - `pool_list()`: List all pools. ✅ (via Pool.list())
+   - `pool_members(pool)`: Get pool members. ✅ (via Pool.members())
+   - `pool_create(pool)`: Create a new pool. ✅ (via Pool.create())
+   - `pool_delete(pool)`: Delete a pool. ✅ (via Pool.delete())
+   - `pool_update(pool, config)`: Update pool configuration. ✅ (via Pool.update())
+
+   **Notes for Phase 1 Part 2:**
+   - Added pydantic config validation (ProxmoxConfig model).
+   - Refactored methods into separate VM, Storage, Pool wrapper classes for better organization.
+   - Added task polling helper function `poll_task_until_complete`.
+   - All methods support both QEMU and LXC where applicable.
+   - Error handling and logging improved throughout.
+   - Requires pydantic>=1.8.0 added to requirements.txt.
 
 ### Phase 2: Advanced VM and Container Features (High Priority)
 

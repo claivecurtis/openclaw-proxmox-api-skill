@@ -3,10 +3,25 @@ import json
 import time
 import logging
 import os
+from typing import Dict, List, Optional, Any
+try:
+    from pydantic import BaseModel, ValidationError
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    BaseModel = object
+    ValidationError = Exception
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Config validation
+class ProxmoxConfig(BaseModel):
+    host: str
+    verify_ssl: bool = True
+    token_path: Optional[str] = None
+    timeout: int = 30
 
 class ProxmoxAuthError(Exception):
     pass
@@ -147,6 +162,74 @@ class ProxmoxClient:
             logger.error(f"Failed to list storage pools: {e}")
             raise
 
+    def storage_status(self, storage):
+        """
+        Get storage status.
+
+        :param storage: Storage ID
+        :return: Storage status dictionary
+        """
+        path = f'/storage/{storage}/status'
+        try:
+            status = self._get(path)
+            logger.info(f"Retrieved status for storage {storage}")
+            return status['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get status for storage {storage}: {e}")
+            raise
+
+    def storage_content(self, storage, content_type=None):
+        """
+        List storage content.
+
+        :param storage: Storage ID
+        :param content_type: Optional content type filter (e.g., 'iso', 'vztmpl')
+        :return: List of content items
+        """
+        path = f'/storage/{storage}/content'
+        params = {}
+        if content_type:
+            params['content'] = content_type
+        try:
+            content = self._get(path, params)
+            logger.info(f"Retrieved {len(content['data'])} content items from storage {storage}")
+            return content['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list content for storage {storage}: {e}")
+            raise
+
+    def storage_create(self, storage_id, config):
+        """
+        Create a new storage.
+
+        :param storage_id: Storage ID
+        :param config: Storage configuration dictionary
+        :return: None
+        """
+        path = '/storage'
+        data = {'id': storage_id, **config}
+        try:
+            self._post(path, data)
+            logger.info(f"Storage {storage_id} created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create storage {storage_id}: {e}")
+            raise
+
+    def storage_delete(self, storage):
+        """
+        Delete a storage.
+
+        :param storage: Storage ID
+        :return: None
+        """
+        path = f'/storage/{storage}'
+        try:
+            self._post(path, {})  # DELETE is POST with empty data
+            logger.info(f"Storage {storage} deleted successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete storage {storage}: {e}")
+            raise
+
     def list_resource_pools(self):
         """
         List resource pools in the cluster.
@@ -198,6 +281,53 @@ class ProxmoxClient:
             logger.error(f"Failed to create resource pool '{poolid}': {e}")
             raise
 
+    def pool_members(self, pool):
+        """
+        Get members of a resource pool.
+
+        :param pool: Pool ID
+        :return: List of pool members
+        """
+        try:
+            pool_details = self._get(f'/pools/{pool}')
+            members = pool_details['data'].get('members', [])
+            logger.info(f"Retrieved {len(members)} members for pool '{pool}'")
+            return members
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get members for pool '{pool}': {e}")
+            raise
+
+    def pool_update(self, pool, config):
+        """
+        Update a resource pool.
+
+        :param pool: Pool ID
+        :param config: Configuration updates dictionary
+        :return: None
+        """
+        path = f'/pools/{pool}'
+        try:
+            self._post(path, config)
+            logger.info(f"Resource pool '{pool}' updated successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to update resource pool '{pool}': {e}")
+            raise
+
+    def pool_delete(self, pool):
+        """
+        Delete a resource pool.
+
+        :param pool: Pool ID
+        :return: None
+        """
+        path = f'/pools/{pool}'
+        try:
+            self._post(path, {})  # DELETE is POST with empty data
+            logger.info(f"Resource pool '{pool}' deleted successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete resource pool '{pool}': {e}")
+            raise
+
     def get_vm_status(self, node, vmid, is_lxc=False):
         """
         Get full status of a VM.
@@ -215,6 +345,90 @@ class ProxmoxClient:
             return status['data']
         except ProxmoxAPIError as e:
             logger.error(f"Failed to get status for {vm_type} {vmid}: {e}")
+            raise
+
+    def vm_create(self, node, vmid, config, is_lxc=False):
+        """
+        Create a new VM.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param config: VM configuration dictionary
+        :param is_lxc: True if LXC, False for QEMU
+        :return: UPID of the creation task
+        """
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/{vm_type}'
+        data = {'vmid': vmid, **config}
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"VM {vmid} creation initiated on node {node}, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create VM {vmid}: {e}")
+            raise
+
+    def vm_delete(self, node, vmid, is_lxc=False):
+        """
+        Delete a VM.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param is_lxc: True if LXC, False for QEMU
+        :return: UPID of the deletion task
+        """
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/{vm_type}/{vmid}'
+        try:
+            result = self._post(path, {})  # DELETE is POST with empty data
+            if 'data' in result:
+                upid = result['data']
+                logger.info(f"VM {vmid} deletion initiated on node {node}, UPID: {upid}")
+                return upid
+            else:
+                logger.info(f"VM {vmid} deleted synchronously")
+                return None
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete VM {vmid}: {e}")
+            raise
+
+    def vm_config_get(self, node, vmid, is_lxc=False):
+        """
+        Get VM configuration.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param is_lxc: True if LXC, False for QEMU
+        :return: VM configuration dictionary
+        """
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/{vm_type}/{vmid}/config'
+        try:
+            config = self._get(path)
+            logger.info(f"Retrieved config for {vm_type} {vmid}")
+            return config['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get config for {vm_type} {vmid}: {e}")
+            raise
+
+    def vm_config_set(self, node, vmid, config, is_lxc=False):
+        """
+        Update VM configuration.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param config: Configuration updates dictionary
+        :param is_lxc: True if LXC, False for QEMU
+        :return: None
+        """
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/{vm_type}/{vmid}/config'
+        try:
+            self._post(path, config)
+            logger.info(f"Updated config for {vm_type} {vmid}")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to update config for {vm_type} {vmid}: {e}")
             raise
 
     def poll_task(self, node, upid, timeout=300, poll_interval=5):
@@ -368,22 +582,143 @@ class PBSClient(ProxmoxClient):
             logger.error(f"Failed to backup {backup_type} {vmid}: {e}")
             raise
 
+
+class VM:
+    """
+    Wrapper class for VM operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def list(self, node=None):
+        """
+        List VMs. If node is specified, list VMs on that node.
+        """
+        if node:
+            # For specific node, get from node resources
+            resources = self.client._get(f'/nodes/{node}/qemu')
+            vms = resources['data']
+            for vm in vms:
+                vm['node'] = node
+            return vms
+        else:
+            return self.client.list_vms()
+
+    def status(self, vmid, node, is_lxc=False):
+        return self.client.get_vm_status(node, vmid, is_lxc)
+
+    def start(self, vmid, node, is_lxc=False):
+        return self.client.vm_action(node, vmid, 'start', is_lxc=is_lxc)
+
+    def stop(self, vmid, node, is_lxc=False):
+        return self.client.vm_action(node, vmid, 'stop', is_lxc=is_lxc)
+
+    def reboot(self, vmid, node, is_lxc=False):
+        return self.client.vm_action(node, vmid, 'reboot', is_lxc=is_lxc)
+
+    def shutdown(self, vmid, node, is_lxc=False, timeout=None):
+        kwargs = {}
+        if timeout:
+            kwargs['timeout'] = timeout
+        return self.client.vm_action(node, vmid, 'shutdown', **kwargs, is_lxc=is_lxc)
+
+    def create(self, node, vmid, config, is_lxc=False):
+        return self.client.vm_create(node, vmid, config, is_lxc)
+
+    def delete(self, node, vmid, is_lxc=False):
+        return self.client.vm_delete(node, vmid, is_lxc)
+
+    def config_get(self, node, vmid, is_lxc=False):
+        return self.client.vm_config_get(node, vmid, is_lxc)
+
+    def config_set(self, node, vmid, config, is_lxc=False):
+        return self.client.vm_config_set(node, vmid, config, is_lxc)
+
+
+class Storage:
+    """
+    Wrapper class for Storage operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def list(self):
+        return self.client.list_storage_pools()
+
+    def status(self, storage):
+        return self.client.storage_status(storage)
+
+    def content(self, storage, content_type=None):
+        return self.client.storage_content(storage, content_type)
+
+    def create(self, storage_id, config):
+        return self.client.storage_create(storage_id, config)
+
+    def delete(self, storage):
+        return self.client.storage_delete(storage)
+
+
+class Pool:
+    """
+    Wrapper class for Pool operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def list(self):
+        return self.client.list_resource_pools()
+
+    def members(self, pool):
+        return self.client.pool_members(pool)
+
+    def create(self, poolid, comment=''):
+        return self.client.create_resource_pool(poolid, comment)
+
+    def update(self, pool, config):
+        return self.client.pool_update(pool, config)
+
+    def delete(self, pool):
+        return self.client.pool_delete(pool)
+
+
+# Task polling helper
+def poll_task_until_complete(client: ProxmoxClient, node: str, upid: str, timeout: int = 300, poll_interval: int = 5) -> bool:
+    """
+    Poll a task until completion and return success status.
+
+    :param client: ProxmoxClient instance
+    :param node: Node name
+    :param upid: Unique Process ID
+    :param timeout: Timeout in seconds
+    :param poll_interval: Polling interval in seconds
+    :return: True if successful, raises exception otherwise
+    """
+    return client.poll_task(node, upid, timeout, poll_interval)
+
 # Utility function to load client from config
 def load_client():
     workspace = os.getenv('OPENCLAW_WORKSPACE', os.path.dirname(os.path.dirname(__file__)))
     config_path = os.path.join(workspace, 'secrets', 'config.proxmox.yaml')
     token_path = os.path.join(workspace, 'secrets', 'pve-token.txt')
-    
+
     # Load config
     import yaml
     with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    
+        raw_config = yaml.safe_load(f)
+
+    # Validate config
+    if PYDANTIC_AVAILABLE:
+        try:
+            config = ProxmoxConfig(**raw_config['proxmox'])
+        except ValidationError as e:
+            raise ValueError(f"Invalid config: {e}")
+    else:
+        config = ProxmoxConfig()
+        config.host = raw_config['proxmox'].get('host')
+        config.verify_ssl = raw_config['proxmox'].get('verify_ssl', True)
+
     # Load token
     with open(token_path, 'r') as f:
         token = f.read().strip()
-    
-    host = config['proxmox'].get('host')
-    verify_ssl = config['proxmox'].get('verify_ssl', True)
-    
-    return ProxmoxClient(host, token, verify_ssl)
+
+    return ProxmoxClient(config.host, token, config.verify_ssl)
