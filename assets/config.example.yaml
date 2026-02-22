@@ -3,4 +3,4 @@ proxmox:
   port: 8006
   token_path: workspace/secrets/pve-token.txt
   timeout: 300  # seconds for task polling
-  verify_ssl: false  # Self-signed common
+  verify_ssl: false  # Self-signed
