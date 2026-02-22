@@ -54,11 +54,11 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - Spawn `subagents` for long-running tasks (backups, migrations).
 - Send notifications via `message` tool for monitoring alerts.
 
-**Example (auth test + list top VMs):**
+**Example (auth test):**
 ```
-exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Host:\", c.host); print(\"VMs:\", [vm[\\\"name\\\"] for vm in c.list_vms()[:3]])'"
+exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Auth OK\")'"
 ```
-Expected: `Host: 10.0.0.12` + VM names (auth OK).
+Expected: `Auth OK` (no PII/hosts).
 
 ## Dependencies
 See `requirements.txt` for Python packages.
