@@ -87,14 +87,22 @@ class ProxmoxClient:
 
     def list_vms(self):
         """
-        List all VMs (QEMU and LXC) in the cluster.
+        List all VMs (QEMU and LXC) in the cluster with pool information.
 
         :return: List of VM dictionaries
         """
         try:
             resources = self._get('/cluster/resources')
             vms = [r for r in resources['data'] if r['type'] in ('qemu', 'lxc')]
-            logger.info(f"Retrieved {len(vms)} VMs")
+            # Add pool information
+            pools = self.list_pools_with_members()
+            pool_members = {}
+            for pool in pools:
+                for member in pool.get('members', []):
+                    pool_members[f"{member['type']}/{member['vmid']}"] = pool['poolid']
+            for vm in vms:
+                vm['pool'] = pool_members.get(f"{vm['type']}/{vm['vmid']}", None)
+            logger.info(f"Retrieved {len(vms)} VMs with pool info")
             return vms
         except ProxmoxAPIError as e:
             logger.error(f"Failed to list VMs: {e}")
@@ -153,6 +161,24 @@ class ProxmoxClient:
             logger.error(f"Failed to list resource pools: {e}")
             raise
 
+    def list_pools_with_members(self):
+        """
+        List resource pools with their members.
+
+        :return: List of resource pool dictionaries with members
+        """
+        try:
+            pools_summary = self._get('/pools')['data']
+            pools = []
+            for pool in pools_summary:
+                pool_details = self._get(f'/pools/{pool["poolid"]}')['data']
+                pools.append(pool_details)
+            logger.info(f"Retrieved {len(pools)} resource pools with members")
+            return pools
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list resource pools with members: {e}")
+            raise
+
     def create_resource_pool(self, poolid, comment=''):
         """
         Create a new resource pool.
@@ -170,6 +196,25 @@ class ProxmoxClient:
             logger.info(f"Resource pool '{poolid}' created successfully")
         except ProxmoxAPIError as e:
             logger.error(f"Failed to create resource pool '{poolid}': {e}")
+            raise
+
+    def get_vm_status(self, node, vmid, is_lxc=False):
+        """
+        Get full status of a VM.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param is_lxc: True if LXC, False for QEMU
+        :return: VM status dictionary
+        """
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/{vm_type}/{vmid}/status/current'
+        try:
+            status = self._get(path)
+            logger.info(f"Retrieved status for {vm_type} {vmid}")
+            return status['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get status for {vm_type} {vmid}: {e}")
             raise
 
     def poll_task(self, node, upid, timeout=300, poll_interval=5):

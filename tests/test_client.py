@@ -205,6 +205,45 @@ class TestProxmoxClient:
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/pools', json={'poolid': 'newpool', 'comment': 'Test pool'}, verify=True, timeout=30)
 
     @patch('client.requests.Session')
+    def test_list_pools_with_members(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_pools = Mock()
+        mock_response_pools.json.return_value = {'data': [{'poolid': 'pool1'}, {'poolid': 'pool2'}]}
+        mock_response_pools.raise_for_status.return_value = None
+        mock_response_detail1 = Mock()
+        mock_response_detail1.json.return_value = {'data': {'poolid': 'pool1', 'members': [{'vmid': 101, 'type': 'qemu'}]}}
+        mock_response_detail1.raise_for_status.return_value = None
+        mock_response_detail2 = Mock()
+        mock_response_detail2.json.return_value = {'data': {'poolid': 'pool2', 'members': []}}
+        mock_response_detail2.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_pools, mock_response_detail1, mock_response_detail2]
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        pools = client.list_pools_with_members()
+
+        assert len(pools) == 2
+        assert pools[0]['poolid'] == 'pool1'
+        assert pools[0]['members'][0]['vmid'] == 101
+        assert pools[1]['poolid'] == 'pool2'
+
+    @patch('client.requests.Session')
+    def test_get_vm_status(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': {'status': 'running', 'vmid': 101}}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        status = client.get_vm_status('node1', 101, False)
+
+        assert status['status'] == 'running'
+        assert status['vmid'] == 101
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/status/current', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
     def test_pbs_init_success(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
