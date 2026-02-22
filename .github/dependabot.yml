@@ -9,12 +9,3 @@ updates:
       - "claivecurtis"
     assignees:
       - "claivecurtis"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "claivecurtis"
-    assignees:
-      - "claivecurtis"

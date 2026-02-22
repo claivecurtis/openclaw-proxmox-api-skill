@@ -1,25 +1,19 @@
-# Environment files
-.env
-.env.local
-
-# Logs
-*.log
-
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 env/
 venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
 .pytest_cache/
+.coverage
+htmlcov/
 
 # IDE
 .vscode/
@@ -28,3 +22,9 @@ pip-delete-this-directory.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+
+# Secrets (do not commit)
+secrets/
