@@ -124,60 +124,6 @@ class ProxmoxClient:
             logger.error(f"Failed to perform VM action '{action}' on {vmid}: {e}")
             raise
 
-    def vm_backup(self, node, vmid, storage, mode='snapshot', compress='gzip', **kwargs):
-        """
-        Create a backup of a VM.
-
-        :param node: Node name
-        :param vmid: VM ID
-        :param storage: Storage pool for backup
-        :param mode: Backup mode ('snapshot', 'suspend', 'stop')
-        :param compress: Compression ('none', 'lzo', 'gzip', 'zstd')
-        :param kwargs: Additional parameters
-        :return: UPID of the backup task
-        """
-        path = f'/nodes/{node}/qemu/{vmid}/snapshot'
-        data = {
-            'snapname': f'backup-{int(time.time())}',
-            'vmstate': 0 if mode == 'snapshot' else 1,
-            'description': 'Automated backup',
-            **kwargs
-        }
-        try:
-            result = self._post(path, data)
-            upid = result['data']
-            logger.info(f"Backup of VM {vmid} initiated, UPID: {upid}")
-            return upid
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to backup VM {vmid}: {e}")
-            raise
-
-    def vm_migrate(self, node, vmid, target_node, online=True, **kwargs):
-        """
-        Migrate a VM to another node.
-
-        :param node: Source node
-        :param vmid: VM ID
-        :param target_node: Target node
-        :param online: Perform online migration if possible
-        :param kwargs: Additional parameters (e.g., with_local_disks)
-        :return: UPID of the migration task
-        """
-        path = f'/nodes/{node}/qemu/{vmid}/migrate'
-        data = {
-            'target': target_node,
-            'online': 1 if online else 0,
-            **kwargs
-        }
-        try:
-            result = self._post(path, data)
-            upid = result['data']
-            logger.info(f"Migration of VM {vmid} to {target_node} initiated, UPID: {upid}")
-            return upid
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to migrate VM {vmid}: {e}")
-            raise
-
     def list_storage_pools(self):
         """
         List storage pools in the cluster.

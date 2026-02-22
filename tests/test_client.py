@@ -149,36 +149,6 @@ class TestProxmoxClient:
                     client.poll_task('node1', 'upid123', timeout=300)
 
     @patch('client.requests.Session')
-    def test_vm_backup(self, mock_session_class):
-        mock_session = Mock()
-        mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:backup:'}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
-
-        client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_backup('node1', 101, 'local')
-
-        assert upid == 'UPID:node1:00000001:00000002:00000003:backup:'
-        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': mock.ANY, 'vmstate': 0, 'description': 'Automated backup'}, verify=True, timeout=30)
-
-    @patch('client.requests.Session')
-    def test_vm_migrate(self, mock_session_class):
-        mock_session = Mock()
-        mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:migrate:'}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
-
-        client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_migrate('node1', 101, 'node2')
-
-        assert upid == 'UPID:node1:00000001:00000002:00000003:migrate:'
-        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/migrate', json={'target': 'node2', 'online': 1}, verify=True, timeout=30)
-
-    @patch('client.requests.Session')
     def test_list_storage_pools(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
