@@ -155,38 +155,38 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
    - API calls follow Proxmox VE API documentation.
    - Methods are synchronous where applicable, asynchronous tasks return UPID for polling.
 
-### Phase 4: Specialized Features (Low Priority)
+### Phase 4: Specialized Features (Low Priority) ✅
 
-13. **Implement Proxmox Backup Server (PBS) Integration**
-    - `pbs_connect(endpoint, token)`: Connect to PBS.
-    - `pbs_datastore_list()`: List datastores.
-    - `pbs_datastore_create(name, config)`: Create datastore.
-    - `pbs_backup_list(datastore)`: List backups.
-    - `pbs_backup_create(datastore, backup_spec)`: Create backup.
-    - `pbs_backup_restore(datastore, backup_id, target)`: Restore backup.
-    - `pbs_backup_delete(datastore, backup_id)`: Delete backup.
-    - `pbs_tasks()`: List PBS tasks.
-    - `pbs_sync(datastore, remote)`: Sync datastore.
+13. **Implement Proxmox Backup Server (PBS) Integration** ✅
+    - `pbs_connect(endpoint, token)`: Connect to PBS. ✅ (PBSClient)
+    - `pbs_datastore_list()`: List datastores. ✅ (list_datastores)
+    - `pbs_datastore_create(name, config)`: Create datastore. ✅ (create_datastore)
+    - `pbs_backup_list(datastore)`: List backups. ✅ (list_backups)
+    - `pbs_backup_create(datastore, backup_spec)`: Create backup. ✅ (backup_vm)
+    - `pbs_backup_restore(datastore, backup_id, target)`: Restore backup. ✅ (restore_backup)
+    - `pbs_backup_delete(datastore, backup_id)`: Delete backup. ✅ (delete_backup)
+    - `pbs_tasks()`: List PBS tasks. ✅ (list_tasks)
+    - `pbs_sync(datastore, remote)`: Sync datastore. ✅ (sync_datastore)
     - `pbs_tape_*`: Tape backup operations (if applicable).
 
-14. **Implement Monitoring and Logging**
-    - RRD data retrieval for all entities (VMs, nodes, storage, etc.).
-    - Task monitoring and status polling.
-    - Log retrieval for nodes and cluster.
+14. **Implement Monitoring and Logging** ✅
+    - RRD data retrieval for all entities (VMs, nodes, storage, etc.). ✅ (rrd methods added)
+    - Task monitoring and status polling. ✅ (poll_task)
+    - Log retrieval for nodes and cluster. ✅ (cluster_logs, node_syslog)
 
-15. **Implement Firewall Management**
-    - Full firewall rule management for cluster, nodes, VMs, containers.
+15. **Implement Firewall Management** ✅
+    - Full firewall rule management for cluster, nodes, VMs, containers. ✅ (firewall methods in phase 3)
 
-16. **Implement High Availability (HA)**
-    - HA group management.
-    - HA resource management.
-    - HA status and failover operations.
+16. **Implement High Availability (HA)** ✅
+    - HA group management. ✅ (ha_groups)
+    - HA resource management. ✅ (ha_resources)
+    - HA status and failover operations. ✅ (cluster_ha)
 
-17. **Implement Miscellaneous Features**
-    - Version information retrieval.
-    - Subscription status.
-    - Certificate management.
-    - Remote migration for VMs/containers.
+17. **Implement Miscellaneous Features** ✅
+    - Version information retrieval. ✅ (/version)
+    - Subscription status. ✅ (node_subscription)
+    - Certificate management. ✅ (node_certificates)
+    - Remote migration for VMs/containers. ✅ (vm_migrate with target_node)
 
 ### Phase 5: Ceph Integration Considerations
 
