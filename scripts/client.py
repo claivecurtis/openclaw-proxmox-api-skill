@@ -107,16 +107,43 @@ class ProxmoxClient:
         :return: List of VM dictionaries
         """
         try:
+            # First, try cluster-level resources
             resources = self._get('/cluster/resources')
+            nodes = [r for r in resources['data'] if r['type'] == 'node']
             vms = [r for r in resources['data'] if r['type'] in ('qemu', 'lxc')]
+            # If no VMs from cluster, fall back to node-specific queries
+            if not vms:
+                logger.info("No VMs found via /cluster/resources, trying node-specific endpoints")
+                vms = []
+                for node in nodes:
+                    node_name = node['node']
+                    try:
+                        qemu_resources = self._get(f'/nodes/{node_name}/qemu')
+                        for vm in qemu_resources['data']:
+                            vm['node'] = node_name
+                            vm['type'] = 'qemu'
+                            vms.append(vm)
+                    except ProxmoxAPIError:
+                        logger.debug(f"No permission to list QEMU on node {node_name}")
+                    try:
+                        lxc_resources = self._get(f'/nodes/{node_name}/lxc')
+                        for vm in lxc_resources['data']:
+                            vm['node'] = node_name
+                            vm['type'] = 'lxc'
+                            vms.append(vm)
+                    except ProxmoxAPIError:
+                        logger.debug(f"No permission to list LXC on node {node_name}")
             # Add pool information
-            pools = self.list_pools_with_members()
-            pool_members = {}
-            for pool in pools:
-                for member in pool.get('members', []):
-                    pool_members[f"{member['type']}/{member['vmid']}"] = pool['poolid']
-            for vm in vms:
-                vm['pool'] = pool_members.get(f"{vm['type']}/{vm['vmid']}", None)
+            try:
+                pools = self.list_pools_with_members()
+                pool_members = {}
+                for pool in pools:
+                    for member in pool.get('members', []):
+                        pool_members[f"{member['type']}/{member['vmid']}"] = pool['poolid']
+                for vm in vms:
+                    vm['pool'] = pool_members.get(f"{vm['type']}/{vm['vmid']}", None)
+            except ProxmoxAPIError:
+                logger.debug("Failed to get pool information")
             logger.info(f"Retrieved {len(vms)} VMs with pool info")
             return vms
         except ProxmoxAPIError as e:
