@@ -2715,47 +2715,6 @@ class Node:
         return self.client.node_ceph(node)
 
 
-class Access:
-    """
-    Wrapper class for Access Control operations.
-    """
-    def __init__(self, client: ProxmoxClient):
-        self.client = client
-
-    def user_list(self):
-        return self.client.user_list()
-
-    def user_create(self, userid, config):
-        return self.client.user_create(userid, config)
-
-    def user_delete(self, userid):
-        return self.client.user_delete(userid)
-
-    def group_list(self):
-        return self.client.group_list()
-
-    def group_create(self, groupid):
-        return self.client.group_create(groupid)
-
-    def role_list(self):
-        return self.client.role_list()
-
-    def role_create(self, roleid, privs):
-        return self.client.role_create(roleid, privs)
-
-    def permission_list(self):
-        return self.client.permission_list()
-
-    def domain_list(self):
-        return self.client.domain_list()
-
-    def token_create(self, user, tokenid):
-        return self.client.token_create(user, tokenid)
-
-    def token_delete(self, user, tokenid):
-        return self.client.token_delete(user, tokenid)
-
-
 # Task polling helper
 def poll_task_until_complete(client: ProxmoxClient, node: str, upid: str, timeout: int = 300, poll_interval: int = 5) -> bool:
     """
