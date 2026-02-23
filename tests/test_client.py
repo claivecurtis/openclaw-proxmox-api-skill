@@ -710,3 +710,168 @@ class TestProxmoxClient:
 
         assert rules == [{'type': 'in', 'action': 'ACCEPT'}]
         mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/firewall/rules', params=None, verify=True, timeout=30)
+
+    # Phase 3 tests
+    @patch('client.requests.Session')
+    def test_storage_upload(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        client.storage_upload('local', 'test.iso', b'content')
+
+        # Note: actual call may vary for multipart
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/pve.example.com/storage/local/upload', files={'filename': ('test.iso', b'content')}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_storage_download(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.content = b'downloaded content'
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        content = client.storage_download('local', 'test.iso')
+
+        assert content == b'downloaded content'
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/storage/local/content/test.iso', verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_storage_rrd(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'time': 123456, 'value': 100}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        rrd = client.storage_rrd('local', timeframe='day')
+
+        assert rrd == [{'time': 123456, 'value': 100}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/storage/local/rrd', params={'timeframe': 'day'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_storage_scan(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:123:scan'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.storage_scan('local')
+
+        assert upid == 'UPID:node1:123:scan'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/storage/local/scan', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_cluster_firewall(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'type': 'in', 'action': 'DROP'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        rules = client.cluster_firewall()
+
+        assert rules == [{'type': 'in', 'action': 'DROP'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/cluster/firewall/rules', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_cluster_ha(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': {'status': 'active'}}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        ha = client.cluster_ha()
+
+        assert ha == {'status': 'active'}
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/cluster/ha/status', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_cluster_resources(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'type': 'node', 'id': 'node1'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        resources = client.cluster_resources(type='node')
+
+        assert resources == [{'type': 'node', 'id': 'node1'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/cluster/resources', params={'type': 'node'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_cluster_nextid(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 102}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        nextid = client.cluster_nextid()
+
+        assert nextid == 102
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/cluster/nextid', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_user_list(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'userid': 'user@pve'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        users = client.user_list()
+
+        assert users == [{'userid': 'user@pve'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/access/users', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_node_firewall(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'type': 'in', 'action': 'ACCEPT'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        rules = client.node_firewall('node1')
+
+        assert rules == [{'type': 'in', 'action': 'ACCEPT'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/firewall/rules', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_node_dns(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': {'search': 'example.com'}}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        dns = client.node_dns('node1')
+
+        assert dns == {'search': 'example.com'}
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/dns', params=None, verify=True, timeout=30)
