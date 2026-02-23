@@ -55,14 +55,36 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - Spawn `subagents` for long-running tasks (backups, migrations).
 - Send notifications via `message` tool for monitoring alerts.
 
-**Example (auth test):**
-```
-exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Auth OK\")'"
-```
-Expected: `Auth OK` (no PII/hosts).
+**Examples:**
 
-### Output Formatting
-Discord: Use AGENTS.md policy (bullets + full JSON compact, no loss). Raw for web/TUI.
+- **Auth Test:**
+  ```
+  exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Auth OK\")'"
+  ```
+  - Expected: `Auth OK` (no PII/hosts).
+
+- **VM List Example (Discord Format):**
+  - **Summary:** Retrieved 1 VM on node pve01.
+  - **Details:** VM 100 (test-vm) is running, type qemu.
+  
+  Full JSON: [{"vmid":100,"name":"test-vm","node":"pve01","status":"running","type":"qemu"}]
+
+### Output Formatting Policy
+Apply this globally to all commands and outputs (e.g., Proxmox, exec results, etc.). Preserve full context with no data loss in JSON representations.
+
+- **Discord (channel == discord):** Use human-readable bullets or summaries for key insights, followed by full compact JSON (minified, no data loss) for complete details.
+- **Web/TUI/Main Sessions:** Use raw dense formats like JSON objects, tables, or compact markdown for efficiency.
+- **General Rules (All Platforms):**
+  - **No markdown tables in Discord/WhatsApp:** Use bullet lists instead.
+  - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`.
+  - **WhatsApp:** No headers — use **bold** or CAPS for emphasis.
+
+**Example (Discord Output for Proxmox VM Status):**
+
+- **Summary:** VM 100 is running with 2GB RAM and 1 CPU core.
+- **Details:** CPU usage at 15%, uptime 2 days.
+
+Full JSON: {"vmid":100,"name":"test-vm","status":"running","uptime":172800,"cpus":1,"mem":2147483648,"maxmem":2147483648,"cpu":0.15}
 
 ## Dependencies
 See `requirements.txt` for Python packages.
