@@ -181,6 +181,11 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
     - Certificate management.
     - Remote migration for VMs/containers.
 
+### Phase 5: Ceph Integration Considerations
+
+- Ceph API/integration (cluster ceph support/endpoints).
+- Notes → docs.
+
 ## Implementation Notes
 
 - Each phase builds on the previous; core features must be completed before advanced ones.
