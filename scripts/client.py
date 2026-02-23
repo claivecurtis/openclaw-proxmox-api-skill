@@ -231,6 +231,77 @@ class ProxmoxClient:
             logger.error(f"Failed to delete storage {storage}: {e}")
             raise
 
+    # Advanced storage operations
+    def storage_upload(self, storage, file_path, content):
+        """
+        Upload file to storage.
+
+        :param storage: Storage ID
+        :param file_path: File path in storage
+        :param content: File content (bytes or string)
+        :return: Upload result
+        """
+        path = f'/storage/{storage}/upload'
+        # Note: This might require multipart/form-data, adjust if needed
+        data = {'content': content, 'filename': file_path}
+        try:
+            result = self._post(path, data)
+            logger.info(f"Uploaded file {file_path} to storage {storage}")
+            return result['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to upload file to storage {storage}: {e}")
+            raise
+
+    def storage_download(self, storage, file_path):
+        """
+        Download file from storage.
+
+        :param storage: Storage ID
+        :param file_path: File path in storage
+        :return: File content
+        """
+        path = f'/storage/{storage}/content/{file_path}'
+        try:
+            content = self._get(path)
+            logger.info(f"Downloaded file {file_path} from storage {storage}")
+            return content['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to download file from storage {storage}: {e}")
+            raise
+
+    def storage_rrd(self, storage, **kwargs):
+        """
+        Get storage RRD data.
+
+        :param storage: Storage ID
+        :param kwargs: Additional parameters (e.g., timeframe='hour')
+        :return: RRD data
+        """
+        path = f'/storage/{storage}/rrd'
+        try:
+            rrd = self._get(path, kwargs)
+            logger.info(f"Retrieved RRD data for storage {storage}")
+            return rrd['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get RRD data for storage {storage}: {e}")
+            raise
+
+    def storage_scan(self, storage):
+        """
+        Scan storage for content.
+
+        :param storage: Storage ID
+        :return: Scan result
+        """
+        path = f'/storage/{storage}/scan'
+        try:
+            result = self._post(path, {})
+            logger.info(f"Scanned storage {storage}")
+            return result['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to scan storage {storage}: {e}")
+            raise
+
     def list_resource_pools(self):
         """
         List resource pools in the cluster.
@@ -366,6 +437,243 @@ class ProxmoxClient:
         """
         return self._get('/cluster/backup')
 
+    # Advanced cluster operations
+    def cluster_firewall(self):
+        """
+        Get cluster firewall rules.
+
+        :return: Cluster firewall rules
+        """
+        path = '/cluster/firewall/rules'
+        try:
+            rules = self._get(path)
+            logger.info("Retrieved cluster firewall rules")
+            return rules['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get cluster firewall rules: {e}")
+            raise
+
+    def cluster_ha(self, **kwargs):
+        """
+        Manage cluster HA.
+
+        :param kwargs: Additional parameters (e.g., command='status')
+        :return: HA information
+        """
+        path = '/cluster/ha'
+        try:
+            ha = self._get(path, kwargs)
+            logger.info("Retrieved cluster HA status")
+            return ha['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get cluster HA status: {e}")
+            raise
+
+    def cluster_resources(self, **kwargs):
+        """
+        Get cluster resources.
+
+        :param kwargs: Additional parameters (e.g., type='vm')
+        :return: Cluster resources
+        """
+        path = '/cluster/resources'
+        try:
+            resources = self._get(path, kwargs)
+            logger.info("Retrieved cluster resources")
+            return resources['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get cluster resources: {e}")
+            raise
+
+    def cluster_nextid(self):
+        """
+        Get next available VMID.
+
+        :return: Next VMID
+        """
+        path = '/cluster/nextid'
+        try:
+            nextid = self._get(path)
+            logger.info("Retrieved next VMID")
+            return nextid['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get next VMID: {e}")
+            raise
+
+    # Access control operations
+    def user_list(self):
+        """
+        List users.
+
+        :return: List of users
+        """
+        path = '/access/users'
+        try:
+            users = self._get(path)
+            logger.info("Retrieved list of users")
+            return users['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list users: {e}")
+            raise
+
+    def user_create(self, userid, config):
+        """
+        Create a user.
+
+        :param userid: User ID (e.g., 'user@pve')
+        :param config: User configuration dictionary
+        :return: None
+        """
+        path = '/access/users'
+        data = {'userid': userid, **config}
+        try:
+            self._post(path, data)
+            logger.info(f"User {userid} created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create user {userid}: {e}")
+            raise
+
+    def user_delete(self, userid):
+        """
+        Delete a user.
+
+        :param userid: User ID
+        :return: None
+        """
+        path = f'/access/users/{userid}'
+        try:
+            self._post(path, {})  # DELETE via POST
+            logger.info(f"User {userid} deleted successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete user {userid}: {e}")
+            raise
+
+    def group_list(self):
+        """
+        List groups.
+
+        :return: List of groups
+        """
+        path = '/access/groups'
+        try:
+            groups = self._get(path)
+            logger.info("Retrieved list of groups")
+            return groups['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list groups: {e}")
+            raise
+
+    def group_create(self, groupid):
+        """
+        Create a group.
+
+        :param groupid: Group ID
+        :return: None
+        """
+        path = '/access/groups'
+        data = {'groupid': groupid}
+        try:
+            self._post(path, data)
+            logger.info(f"Group {groupid} created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create group {groupid}: {e}")
+            raise
+
+    def role_list(self):
+        """
+        List roles.
+
+        :return: List of roles
+        """
+        path = '/access/roles'
+        try:
+            roles = self._get(path)
+            logger.info("Retrieved list of roles")
+            return roles['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list roles: {e}")
+            raise
+
+    def role_create(self, roleid, privs):
+        """
+        Create a role.
+
+        :param roleid: Role ID
+        :param privs: Privileges list or string
+        :return: None
+        """
+        path = '/access/roles'
+        data = {'roleid': roleid, 'privs': privs}
+        try:
+            self._post(path, data)
+            logger.info(f"Role {roleid} created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create role {roleid}: {e}")
+            raise
+
+    def permission_list(self):
+        """
+        List permissions.
+
+        :return: List of permissions
+        """
+        path = '/access/permissions'
+        try:
+            perms = self._get(path)
+            logger.info("Retrieved list of permissions")
+            return perms['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list permissions: {e}")
+            raise
+
+    def domain_list(self):
+        """
+        List authentication domains.
+
+        :return: List of domains
+        """
+        path = '/access/domains'
+        try:
+            domains = self._get(path)
+            logger.info("Retrieved list of domains")
+            return domains['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list domains: {e}")
+            raise
+
+    def token_create(self, user, tokenid):
+        """
+        Create an API token.
+
+        :param user: User ID
+        :param tokenid: Token ID
+        :return: Token info
+        """
+        path = f'/access/users/{user}/token/{tokenid}'
+        try:
+            token = self._post(path, {})
+            logger.info(f"Token {tokenid} created for user {user}")
+            return token['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create token {tokenid} for user {user}: {e}")
+            raise
+
+    def token_delete(self, user, tokenid):
+        """
+        Delete an API token.
+
+        :param user: User ID
+        :param tokenid: Token ID
+        :return: None
+        """
+        path = f'/access/users/{user}/token/{tokenid}'
+        try:
+            self._post(path, {})  # DELETE via POST
+            logger.info(f"Token {tokenid} deleted for user {user}")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete token {tokenid} for user {user}: {e}")
+            raise
+
     # Node operations
     def node_status(self, node):
         """
@@ -402,6 +710,240 @@ class ProxmoxClient:
         :return: List of node storage
         """
         return self._get(f'/nodes/{node}/storage')
+
+    # Node advanced operations
+    def node_firewall(self, node):
+        """
+        Get node firewall rules.
+
+        :param node: Node name
+        :return: Firewall rules
+        """
+        path = f'/nodes/{node}/firewall/rules'
+        try:
+            rules = self._get(path)
+            logger.info(f"Retrieved firewall rules for node {node}")
+            return rules['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get firewall rules for node {node}: {e}")
+            raise
+
+    def node_dns(self, node):
+        """
+        Get node DNS settings.
+
+        :param node: Node name
+        :return: DNS settings
+        """
+        path = f'/nodes/{node}/dns'
+        try:
+            dns = self._get(path)
+            logger.info(f"Retrieved DNS settings for node {node}")
+            return dns['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get DNS settings for node {node}: {e}")
+            raise
+
+    def node_time(self, node):
+        """
+        Get node time.
+
+        :param node: Node name
+        :return: Node time
+        """
+        path = f'/nodes/{node}/time'
+        try:
+            time_info = self._get(path)
+            logger.info(f"Retrieved time for node {node}")
+            return time_info['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get time for node {node}: {e}")
+            raise
+
+    def node_version(self, node):
+        """
+        Get node version.
+
+        :param node: Node name
+        :return: Node version
+        """
+        path = f'/nodes/{node}/version'
+        try:
+            version = self._get(path)
+            logger.info(f"Retrieved version for node {node}")
+            return version['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get version for node {node}: {e}")
+            raise
+
+    def node_apt(self, node, **kwargs):
+        """
+        Manage node APT packages.
+
+        :param node: Node name
+        :param kwargs: Additional parameters (e.g., command='update')
+        :return: APT operation result
+        """
+        path = f'/nodes/{node}/apt'
+        try:
+            result = self._get(path, kwargs)
+            logger.info(f"APT operation on node {node}")
+            return result['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed APT operation on node {node}: {e}")
+            raise
+
+    def node_subscription(self, node):
+        """
+        Get node subscription.
+
+        :param node: Node name
+        :return: Subscription info
+        """
+        path = f'/nodes/{node}/subscription'
+        try:
+            sub = self._get(path)
+            logger.info(f"Retrieved subscription for node {node}")
+            return sub['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get subscription for node {node}: {e}")
+            raise
+
+    def node_syslog(self, node, **kwargs):
+        """
+        Get node syslog.
+
+        :param node: Node name
+        :param kwargs: Additional parameters (e.g., limit=50)
+        :return: Syslog entries
+        """
+        path = f'/nodes/{node}/syslog'
+        try:
+            syslog = self._get(path, kwargs)
+            logger.info(f"Retrieved syslog for node {node}")
+            return syslog['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get syslog for node {node}: {e}")
+            raise
+
+    def node_rrd(self, node, **kwargs):
+        """
+        Get node RRD data.
+
+        :param node: Node name
+        :param kwargs: Additional parameters (e.g., timeframe='hour')
+        :return: RRD data
+        """
+        path = f'/nodes/{node}/rrd'
+        try:
+            rrd = self._get(path, kwargs)
+            logger.info(f"Retrieved RRD data for node {node}")
+            return rrd['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get RRD data for node {node}: {e}")
+            raise
+
+    def node_vncshell(self, node):
+        """
+        Get VNC shell for node.
+
+        :param node: Node name
+        :return: VNC shell data
+        """
+        path = f'/nodes/{node}/vncshell'
+        try:
+            shell = self._post(path, {})
+            logger.info(f"VNC shell created for node {node}")
+            return shell['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create VNC shell for node {node}: {e}")
+            raise
+
+    def node_spiceshell(self, node):
+        """
+        Get SPICE shell for node.
+
+        :param node: Node name
+        :return: SPICE shell data
+        """
+        path = f'/nodes/{node}/spiceshell'
+        try:
+            shell = self._post(path, {})
+            logger.info(f"SPICE shell created for node {node}")
+            return shell['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create SPICE shell for node {node}: {e}")
+            raise
+
+    def node_migrateall(self, node, target):
+        """
+        Migrate all VMs/containers from node.
+
+        :param node: Source node name
+        :param target: Target node name
+        :return: UPID of the migration task
+        """
+        path = f'/nodes/{node}/migrateall'
+        data = {'target': target}
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"Migrate all from node {node} to {target} initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to migrate all from node {node}: {e}")
+            raise
+
+    def node_startall(self, node):
+        """
+        Start all VMs/containers on node.
+
+        :param node: Node name
+        :return: UPID of the start task
+        """
+        path = f'/nodes/{node}/startall'
+        try:
+            result = self._post(path, {})
+            upid = result['data']
+            logger.info(f"Start all on node {node} initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to start all on node {node}: {e}")
+            raise
+
+    def node_stopall(self, node):
+        """
+        Stop all VMs/containers on node.
+
+        :param node: Node name
+        :return: UPID of the stop task
+        """
+        path = f'/nodes/{node}/stopall'
+        try:
+            result = self._post(path, {})
+            upid = result['data']
+            logger.info(f"Stop all on node {node} initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to stop all on node {node}: {e}")
+            raise
+
+    def node_ceph(self, node, **kwargs):
+        """
+        Manage Ceph on node.
+
+        :param node: Node name
+        :param kwargs: Additional parameters (e.g., command='status')
+        :return: Ceph operation result
+        """
+        path = f'/nodes/{node}/ceph'
+        try:
+            result = self._get(path, kwargs)
+            logger.info(f"Ceph operation on node {node}")
+            return result['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed Ceph operation on node {node}: {e}")
+            raise
 
     def get_vm_status(self, node, vmid, is_lxc=False):
         """
@@ -1094,6 +1636,542 @@ class ProxmoxClient:
                 raise
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
 
+    # Phase 3: Access Control
+    def user_list(self):
+        """
+        List users.
+
+        :return: List of users
+        """
+        try:
+            users = self._get('/access/users')
+            logger.info(f"Retrieved {len(users['data'])} users")
+            return users['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list users: {e}")
+            raise
+
+    def user_create(self, userid, config):
+        """
+        Create a user.
+
+        :param userid: User ID (e.g., 'user@pve')
+        :param config: User configuration dictionary
+        :return: None
+        """
+        path = '/access/users'
+        data = {'userid': userid, **config}
+        try:
+            self._post(path, data)
+            logger.info(f"User '{userid}' created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create user '{userid}': {e}")
+            raise
+
+    def user_delete(self, userid):
+        """
+        Delete a user.
+
+        :param userid: User ID
+        :return: None
+        """
+        path = f'/access/users/{userid}'
+        try:
+            self._post(path, {})  # DELETE via POST
+            logger.info(f"User '{userid}' deleted successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete user '{userid}': {e}")
+            raise
+
+    def group_list(self):
+        """
+        List groups.
+
+        :return: List of groups
+        """
+        try:
+            groups = self._get('/access/groups')
+            logger.info(f"Retrieved {len(groups['data'])} groups")
+            return groups['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list groups: {e}")
+            raise
+
+    def group_create(self, groupid):
+        """
+        Create a group.
+
+        :param groupid: Group ID
+        :return: None
+        """
+        path = '/access/groups'
+        data = {'groupid': groupid}
+        try:
+            self._post(path, data)
+            logger.info(f"Group '{groupid}' created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create group '{groupid}': {e}")
+            raise
+
+    def role_list(self):
+        """
+        List roles.
+
+        :return: List of roles
+        """
+        try:
+            roles = self._get('/access/roles')
+            logger.info(f"Retrieved {len(roles['data'])} roles")
+            return roles['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list roles: {e}")
+            raise
+
+    def role_create(self, roleid, privs):
+        """
+        Create a role.
+
+        :param roleid: Role ID
+        :param privs: List of privileges
+        :return: None
+        """
+        path = '/access/roles'
+        data = {'roleid': roleid, 'privs': ','.join(privs)}
+        try:
+            self._post(path, data)
+            logger.info(f"Role '{roleid}' created successfully")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create role '{roleid}': {e}")
+            raise
+
+    def permission_list(self):
+        """
+        List permissions.
+
+        :return: List of permissions
+        """
+        try:
+            perms = self._get('/access/permissions')
+            logger.info(f"Retrieved permissions")
+            return perms['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list permissions: {e}")
+            raise
+
+    def domain_list(self):
+        """
+        List authentication domains.
+
+        :return: List of domains
+        """
+        try:
+            domains = self._get('/access/domains')
+            logger.info(f"Retrieved {len(domains['data'])} domains")
+            return domains['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list domains: {e}")
+            raise
+
+    def token_create(self, user, tokenid):
+        """
+        Create an API token.
+
+        :param user: User ID
+        :param tokenid: Token ID
+        :return: Token data
+        """
+        path = f'/access/users/{user}/token'
+        data = {'tokenid': tokenid}
+        try:
+            result = self._post(path, data)
+            logger.info(f"Token '{tokenid}' created for user '{user}'")
+            return result['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create token '{tokenid}' for user '{user}': {e}")
+            raise
+
+    def token_delete(self, user, tokenid):
+        """
+        Delete an API token.
+
+        :param user: User ID
+        :param tokenid: Token ID
+        :return: None
+        """
+        path = f'/access/users/{user}/token/{tokenid}'
+        try:
+            self._post(path, {})  # DELETE via POST
+            logger.info(f"Token '{tokenid}' deleted for user '{user}'")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete token '{tokenid}' for user '{user}': {e}")
+            raise
+
+    # Phase 3: Advanced Storage Operations
+    def storage_upload(self, storage, filename, content):
+        """
+        Upload a file to storage.
+
+        :param storage: Storage ID
+        :param filename: Filename
+        :param content: File content (bytes)
+        :return: None
+        """
+        # Note: Upload requires multipart/form-data, not JSON
+        # This is a placeholder; actual implementation may vary
+        path = f'/nodes/{self.host}/storage/{storage}/upload'  # Assuming local node
+        files = {'filename': (filename, content)}
+        try:
+            resp = self.session.post(f"https://{self.host}:8006/api2/json{path}", files=files, verify=self.verify_ssl, timeout=30)
+            resp.raise_for_status()
+            logger.info(f"File '{filename}' uploaded to storage '{storage}'")
+        except requests.exceptions.RequestException as e:
+            raise ProxmoxAPIError(f"Failed to upload file: {e}")
+
+    def storage_download(self, storage, volid):
+        """
+        Download a file from storage.
+
+        :param storage: Storage ID
+        :param volid: Volume ID
+        :return: File content (bytes)
+        """
+        path = f'/storage/{storage}/content/{volid}'
+        try:
+            resp = self.session.get(f"https://{self.host}:8006/api2/json{path}", verify=self.verify_ssl, timeout=30)
+            resp.raise_for_status()
+            logger.info(f"Downloaded volume '{volid}' from storage '{storage}'")
+            return resp.content
+        except requests.exceptions.RequestException as e:
+            raise ProxmoxAPIError(f"Failed to download volume: {e}")
+
+    def storage_rrd(self, storage, timeframe='hour'):
+        """
+        Get storage RRD data.
+
+        :param storage: Storage ID
+        :param timeframe: Timeframe (e.g., 'hour', 'day')
+        :return: RRD data
+        """
+        path = f'/storage/{storage}/rrd'
+        params = {'timeframe': timeframe}
+        try:
+            rrd = self._get(path, params)
+            logger.info(f"Retrieved RRD data for storage '{storage}'")
+            return rrd['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get RRD data for storage '{storage}': {e}")
+            raise
+
+    def storage_scan(self, storage):
+        """
+        Scan storage for content.
+
+        :param storage: Storage ID
+        :return: UPID of scan task
+        """
+        path = f'/storage/{storage}/scan'
+        try:
+            result = self._post(path, {})
+            upid = result['data']
+            logger.info(f"Scan initiated for storage '{storage}', UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to scan storage '{storage}': {e}")
+            raise
+
+    # Phase 3: Advanced Cluster Operations
+    def cluster_firewall(self):
+        """
+        Get cluster firewall rules.
+
+        :return: Firewall rules
+        """
+        try:
+            rules = self._get('/cluster/firewall/rules')
+            logger.info("Retrieved cluster firewall rules")
+            return rules['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get cluster firewall rules: {e}")
+            raise
+
+    def cluster_ha(self):
+        """
+        Get HA status.
+
+        :return: HA status
+        """
+        try:
+            ha = self._get('/cluster/ha/status')
+            logger.info("Retrieved HA status")
+            return ha['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get HA status: {e}")
+            raise
+
+    def cluster_resources(self):
+        """
+        List cluster resources.
+
+        :return: List of resources
+        """
+        try:
+            resources = self._get('/cluster/resources')
+            logger.info(f"Retrieved {len(resources['data'])} cluster resources")
+            return resources['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list cluster resources: {e}")
+            raise
+
+    def cluster_nextid(self):
+        """
+        Get next available VMID.
+
+        :return: Next VMID
+        """
+        try:
+            nextid = self._get('/cluster/nextid')
+            logger.info(f"Next available VMID: {nextid['data']}")
+            return nextid['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get next VMID: {e}")
+            raise
+
+    # Phase 3: Node Advanced Operations
+    def node_firewall(self, node):
+        """
+        Get node firewall rules.
+
+        :param node: Node name
+        :return: Firewall rules
+        """
+        path = f'/nodes/{node}/firewall/rules'
+        try:
+            rules = self._get(path)
+            logger.info(f"Retrieved firewall rules for node '{node}'")
+            return rules['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get firewall rules for node '{node}': {e}")
+            raise
+
+    def node_dns(self, node):
+        """
+        Get node DNS settings.
+
+        :param node: Node name
+        :return: DNS settings
+        """
+        path = f'/nodes/{node}/dns'
+        try:
+            dns = self._get(path)
+            logger.info(f"Retrieved DNS settings for node '{node}'")
+            return dns['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get DNS settings for node '{node}': {e}")
+            raise
+
+    def node_time(self, node):
+        """
+        Get node time settings.
+
+        :param node: Node name
+        :return: Time settings
+        """
+        path = f'/nodes/{node}/time'
+        try:
+            time_data = self._get(path)
+            logger.info(f"Retrieved time settings for node '{node}'")
+            return time_data['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get time settings for node '{node}': {e}")
+            raise
+
+    def node_version(self, node):
+        """
+        Get node software version.
+
+        :param node: Node name
+        :return: Version info
+        """
+        path = f'/nodes/{node}/version'
+        try:
+            version = self._get(path)
+            logger.info(f"Retrieved version for node '{node}'")
+            return version['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get version for node '{node}': {e}")
+            raise
+
+    def node_apt(self, node):
+        """
+        Get node APT package status.
+
+        :param node: Node name
+        :return: APT status
+        """
+        path = f'/nodes/{node}/apt'
+        try:
+            apt = self._get(path)
+            logger.info(f"Retrieved APT status for node '{node}'")
+            return apt['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get APT status for node '{node}': {e}")
+            raise
+
+    def node_subscription(self, node):
+        """
+        Get node subscription info.
+
+        :param node: Node name
+        :return: Subscription info
+        """
+        path = f'/nodes/{node}/subscription'
+        try:
+            sub = self._get(path)
+            logger.info(f"Retrieved subscription info for node '{node}'")
+            return sub['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get subscription info for node '{node}': {e}")
+            raise
+
+    def node_syslog(self, node, limit=None):
+        """
+        Get node syslog.
+
+        :param node: Node name
+        :param limit: Number of lines to retrieve
+        :return: Syslog entries
+        """
+        path = f'/nodes/{node}/syslog'
+        params = {}
+        if limit:
+            params['limit'] = limit
+        try:
+            syslog = self._get(path, params)
+            logger.info(f"Retrieved syslog for node '{node}'")
+            return syslog['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get syslog for node '{node}': {e}")
+            raise
+
+    def node_rrd(self, node, timeframe='hour'):
+        """
+        Get node RRD data.
+
+        :param node: Node name
+        :param timeframe: Timeframe
+        :return: RRD data
+        """
+        path = f'/nodes/{node}/rrd'
+        params = {'timeframe': timeframe}
+        try:
+            rrd = self._get(path, params)
+            logger.info(f"Retrieved RRD data for node '{node}'")
+            return rrd['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get RRD data for node '{node}': {e}")
+            raise
+
+    def node_vncshell(self, node):
+        """
+        Get VNC shell for node.
+
+        :param node: Node name
+        :return: VNC shell data
+        """
+        path = f'/nodes/{node}/vncshell'
+        try:
+            shell = self._post(path, {})
+            logger.info(f"Retrieved VNC shell for node '{node}'")
+            return shell['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get VNC shell for node '{node}': {e}")
+            raise
+
+    def node_spiceshell(self, node):
+        """
+        Get SPICE shell for node.
+
+        :param node: Node name
+        :return: SPICE shell data
+        """
+        path = f'/nodes/{node}/spiceshell'
+        try:
+            shell = self._post(path, {})
+            logger.info(f"Retrieved SPICE shell for node '{node}'")
+            return shell['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get SPICE shell for node '{node}': {e}")
+            raise
+
+    def node_migrateall(self, node, target_node):
+        """
+        Migrate all VMs/containers from node.
+
+        :param node: Source node
+        :param target_node: Target node
+        :return: UPID of migration task
+        """
+        path = f'/nodes/{node}/migrateall'
+        data = {'target': target_node}
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"Migration of all VMs from '{node}' to '{target_node}' initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to migrate all VMs from '{node}': {e}")
+            raise
+
+    def node_startall(self, node):
+        """
+        Start all VMs/containers on node.
+
+        :param node: Node name
+        :return: UPID of start task
+        """
+        path = f'/nodes/{node}/startall'
+        try:
+            result = self._post(path, {})
+            upid = result['data']
+            logger.info(f"Start all VMs on '{node}' initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to start all VMs on '{node}': {e}")
+            raise
+
+    def node_stopall(self, node):
+        """
+        Stop all VMs/containers on node.
+
+        :param node: Node name
+        :return: UPID of stop task
+        """
+        path = f'/nodes/{node}/stopall'
+        try:
+            result = self._post(path, {})
+            upid = result['data']
+            logger.info(f"Stop all VMs on '{node}' initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to stop all VMs on '{node}': {e}")
+            raise
+
+    def node_ceph(self, node):
+        """
+        Get Ceph status for node.
+
+        :param node: Node name
+        :return: Ceph status
+        """
+        path = f'/nodes/{node}/ceph'
+        try:
+            ceph = self._get(path)
+            logger.info(f"Retrieved Ceph status for node '{node}'")
+            return ceph['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to get Ceph status for node '{node}': {e}")
+            raise
+
 class PBSClient(ProxmoxClient):
     """
     Client for Proxmox Backup Server (PBS) API.
@@ -1325,6 +2403,31 @@ class Storage:
     def delete(self, storage):
         return self.client.storage_delete(storage)
 
+    # Phase 3 additions
+    def upload(self, storage, filename, content):
+        return self.client.storage_upload(storage, filename, content)
+
+    def download(self, storage, volid):
+        return self.client.storage_download(storage, volid)
+
+    def rrd(self, storage, timeframe='hour'):
+        return self.client.storage_rrd(storage, timeframe)
+
+    def scan(self, storage):
+        return self.client.storage_scan(storage)
+
+    def upload(self, storage, file_path, content):
+        return self.client.storage_upload(storage, file_path, content)
+
+    def download(self, storage, file_path):
+        return self.client.storage_download(storage, file_path)
+
+    def rrd(self, storage, **kwargs):
+        return self.client.storage_rrd(storage, **kwargs)
+
+    def scan(self, storage):
+        return self.client.storage_scan(storage)
+
 
 class Pool:
     """
@@ -1455,6 +2558,72 @@ class Cluster:
     def backup(self):
         return self.client.cluster_backup()
 
+    # Phase 3 additions
+    def firewall(self):
+        return self.client.cluster_firewall()
+
+    def ha(self):
+        return self.client.cluster_ha()
+
+    def resources(self):
+        return self.client.cluster_resources()
+
+    def nextid(self):
+        return self.client.cluster_nextid()
+
+    def firewall(self):
+        return self.client.cluster_firewall()
+
+    def ha(self, **kwargs):
+        return self.client.cluster_ha(**kwargs)
+
+    def resources(self, **kwargs):
+        return self.client.cluster_resources(**kwargs)
+
+    def nextid(self):
+        return self.client.cluster_nextid()
+
+
+class Access:
+    """
+    Wrapper class for Access Control operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def user_list(self):
+        return self.client.user_list()
+
+    def user_create(self, userid, config):
+        return self.client.user_create(userid, config)
+
+    def user_delete(self, userid):
+        return self.client.user_delete(userid)
+
+    def group_list(self):
+        return self.client.group_list()
+
+    def group_create(self, groupid):
+        return self.client.group_create(groupid)
+
+    def role_list(self):
+        return self.client.role_list()
+
+    def role_create(self, roleid, privs):
+        return self.client.role_create(roleid, privs)
+
+    def permission_list(self):
+        return self.client.permission_list()
+
+    def domain_list(self):
+        return self.client.domain_list()
+
+    def token_create(self, user, tokenid):
+        return self.client.token_create(user, tokenid)
+
+    def token_delete(self, user, tokenid):
+        return self.client.token_delete(user, tokenid)
+
 
 class Node:
     """
@@ -1474,6 +2643,90 @@ class Node:
 
     def storage(self, node):
         return self.client.node_storage(node)
+
+    # Phase 3 additions
+    def firewall(self, node):
+        return self.client.node_firewall(node)
+
+    def dns(self, node):
+        return self.client.node_dns(node)
+
+    def time(self, node):
+        return self.client.node_time(node)
+
+    def version(self, node):
+        return self.client.node_version(node)
+
+    def apt(self, node):
+        return self.client.node_apt(node)
+
+    def subscription(self, node):
+        return self.client.node_subscription(node)
+
+    def syslog(self, node, limit=None):
+        return self.client.node_syslog(node, limit)
+
+    def rrd(self, node, timeframe='hour'):
+        return self.client.node_rrd(node, timeframe)
+
+    def vncshell(self, node):
+        return self.client.node_vncshell(node)
+
+    def spiceshell(self, node):
+        return self.client.node_spiceshell(node)
+
+    def migrateall(self, node, target_node):
+        return self.client.node_migrateall(node, target_node)
+
+    def startall(self, node):
+        return self.client.node_startall(node)
+
+    def stopall(self, node):
+        return self.client.node_stopall(node)
+
+    def ceph(self, node):
+        return self.client.node_ceph(node)
+
+
+class Access:
+    """
+    Wrapper class for Access Control operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def user_list(self):
+        return self.client.user_list()
+
+    def user_create(self, userid, config):
+        return self.client.user_create(userid, config)
+
+    def user_delete(self, userid):
+        return self.client.user_delete(userid)
+
+    def group_list(self):
+        return self.client.group_list()
+
+    def group_create(self, groupid):
+        return self.client.group_create(groupid)
+
+    def role_list(self):
+        return self.client.role_list()
+
+    def role_create(self, roleid, privs):
+        return self.client.role_create(roleid, privs)
+
+    def permission_list(self):
+        return self.client.permission_list()
+
+    def domain_list(self):
+        return self.client.domain_list()
+
+    def token_create(self, user, tokenid):
+        return self.client.token_create(user, tokenid)
+
+    def token_delete(self, user, tokenid):
+        return self.client.token_delete(user, tokenid)
 
 
 # Task polling helper

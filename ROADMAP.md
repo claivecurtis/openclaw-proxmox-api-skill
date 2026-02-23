@@ -105,7 +105,7 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
    - All advanced operations support both QEMU (VM) and LXC (Container).
    - Maintained consistent API and error handling.
 
-### Phase 3: Secondary Features (Medium Priority)
+### Phase 3: Secondary Features (Medium Priority) ✅
 
 9. **Implement Access Control**
    - `user_list()`: List users.
@@ -147,6 +147,14 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
     - `node_startall(node)`: Start all VMs/containers.
     - `node_stopall(node)`: Stop all VMs/containers.
     - `node_ceph(node)`: Ceph management.
+
+   **Notes for Phase 3:**
+   - Implemented access control methods: user_list, user_create, user_delete, group_list, group_create, role_list, role_create, permission_list, domain_list, token_create, token_delete.
+   - Advanced storage operations: storage_upload, storage_download, storage_rrd, storage_scan.
+   - Advanced cluster operations: cluster_firewall, cluster_ha, cluster_resources, cluster_nextid.
+   - Node advanced operations: node_firewall, node_dns, node_time, node_version, node_apt, node_subscription, node_syslog, node_rrd, node_vncshell, node_spiceshell, node_migrateall, node_startall, node_stopall, node_ceph.
+   - All methods integrated into wrapper classes (Access, Storage, Cluster, Node) for better API organization.
+   - Comprehensive error handling and logging maintained throughout.
 
 ### Phase 4: Specialized Features (Low Priority)
 
