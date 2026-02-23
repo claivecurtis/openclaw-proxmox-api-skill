@@ -496,36 +496,6 @@ class ProxmoxClient:
             logger.error(f"Failed to get cluster HA status: {e}")
             raise
 
-    def cluster_ha_groups(self):
-        """
-        List HA groups.
-
-        :return: HA groups
-        """
-        path = '/cluster/ha/groups'
-        try:
-            groups = self._get(path)
-            logger.info(f"Retrieved {len(groups['data'])} HA groups")
-            return groups['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get HA groups: {e}")
-            raise
-
-    def cluster_ha_resources(self):
-        """
-        List HA resources.
-
-        :return: HA resources
-        """
-        path = '/cluster/ha/resources'
-        try:
-            resources = self._get(path)
-            logger.info(f"Retrieved {len(resources['data'])} HA resources")
-            return resources['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get HA resources: {e}")
-            raise
-
     def cluster_resources(self, **kwargs):
         """
         Get cluster resources.
@@ -555,40 +525,6 @@ class ProxmoxClient:
             return nextid['data']
         except ProxmoxAPIError as e:
             logger.error(f"Failed to get next VMID: {e}")
-            raise
-
-    def cluster_rrd(self, timeframe='hour'):
-        """
-        Get RRD data for cluster.
-
-        :param timeframe: Timeframe
-        :return: RRD data
-        """
-        path = '/cluster/rrd'
-        params = {'timeframe': timeframe}
-        try:
-            rrd = self._get(path, params)
-            logger.info("Retrieved cluster RRD data")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get cluster RRD data: {e}")
-            raise
-
-    def cluster_logs(self, limit=50):
-        """
-        Get cluster logs.
-
-        :param limit: Number of log entries
-        :return: Log entries
-        """
-        path = '/cluster/log'
-        params = {'limit': limit}
-        try:
-            logs = self._get(path, params)
-            logger.info(f"Retrieved {len(logs['data'])} cluster log entries")
-            return logs['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get cluster logs: {e}")
             raise
 
     # Access control operations
@@ -900,22 +836,6 @@ class ProxmoxClient:
             logger.error(f"Failed to get subscription for node {node}: {e}")
             raise
 
-    def node_certificates(self, node):
-        """
-        Get node certificates.
-
-        :param node: Node name
-        :return: Certificate info
-        """
-        path = f'/nodes/{node}/certificates'
-        try:
-            certs = self._get(path)
-            logger.info(f"Retrieved certificates for node {node}")
-            return certs['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get certificates for node {node}: {e}")
-            raise
-
     def node_syslog(self, node, **kwargs):
         """
         Get node syslog.
@@ -1050,24 +970,6 @@ class ProxmoxClient:
             return result['data']
         except ProxmoxAPIError as e:
             logger.error(f"Failed Ceph operation on node {node}: {e}")
-            raise
-
-    def node_rrd(self, node, timeframe='hour'):
-        """
-        Get RRD data for node.
-
-        :param node: Node name
-        :param timeframe: Timeframe
-        :return: RRD data
-        """
-        path = f'/nodes/{node}/rrd'
-        params = {'timeframe': timeframe}
-        try:
-            rrd = self._get(path, params)
-            logger.info(f"Retrieved RRD data for node {node}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for node {node}: {e}")
             raise
 
     def get_vm_status(self, node, vmid, is_lxc=False):
@@ -1446,27 +1348,6 @@ class ProxmoxClient:
             return rules['data']
         except ProxmoxAPIError as e:
             logger.error(f"Failed to get firewall rules for {vm_type} {vmid}: {e}")
-            raise
-
-    def vm_rrd(self, node, vmid, timeframe='hour', is_lxc=False):
-        """
-        Get RRD data for VM.
-
-        :param node: Node name
-        :param vmid: VM ID
-        :param timeframe: Timeframe (e.g., 'hour', 'day', 'week', 'month', 'year')
-        :param is_lxc: True if LXC, False for QEMU
-        :return: RRD data
-        """
-        vm_type = 'lxc' if is_lxc else 'qemu'
-        path = f'/nodes/{node}/{vm_type}/{vmid}/rrd'
-        params = {'timeframe': timeframe}
-        try:
-            rrd = self._get(path, params)
-            logger.info(f"Retrieved RRD data for {vm_type} {vmid}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for {vm_type} {vmid}: {e}")
             raise
 
     def poll_task(self, node, upid, timeout=300, poll_interval=5):
@@ -2116,49 +1997,6 @@ class PBSClient(ProxmoxClient):
         except requests.exceptions.RequestException as e:
             raise ProxmoxAPIError(f"PBS Request failed: {e}")
 
-    def _put(self, path, data=None):
-        """
-        Perform a PUT request to the PBS API.
-
-        :param path: API path
-        :param data: JSON data to send
-        :return: JSON response data
-        """
-        url = f"https://{self.host}:8007/api2/json{path}"
-        try:
-            resp = self.session.put(url, json=data, verify=self.verify_ssl, timeout=30)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.exceptions.Timeout:
-            raise ProxmoxAPIError("PBS Request timed out")
-        except requests.exceptions.SSLError:
-            raise ProxmoxAPIError("PBS SSL verification failed")
-        except requests.exceptions.HTTPError as e:
-            raise ProxmoxAPIError(f"PBS HTTP {e.response.status_code}: {e.response.text}")
-        except requests.exceptions.RequestException as e:
-            raise ProxmoxAPIError(f"PBS Request failed: {e}")
-
-    def _delete(self, path):
-        """
-        Perform a DELETE request to the PBS API.
-
-        :param path: API path
-        :return: JSON response data or empty dict
-        """
-        url = f"https://{self.host}:8007/api2/json{path}"
-        try:
-            resp = self.session.delete(url, verify=self.verify_ssl, timeout=30)
-            resp.raise_for_status()
-            return resp.json() if resp.text else {}
-        except requests.exceptions.Timeout:
-            raise ProxmoxAPIError("PBS Request timed out")
-        except requests.exceptions.SSLError:
-            raise ProxmoxAPIError("PBS SSL verification failed")
-        except requests.exceptions.HTTPError as e:
-            raise ProxmoxAPIError(f"PBS HTTP {e.response.status_code}: {e.response.text}")
-        except requests.exceptions.RequestException as e:
-            raise ProxmoxAPIError(f"PBS Request failed: {e}")
-
     def list_datastores(self):
         """
         List datastores on the PBS server.
@@ -2197,104 +2035,6 @@ class PBSClient(ProxmoxClient):
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to backup {backup_type} {vmid}: {e}")
-            raise
-
-    def create_datastore(self, name, config):
-        """
-        Create a new datastore on PBS.
-
-        :param name: Datastore name
-        :param config: Datastore configuration dict
-        :return: None
-        """
-        path = f'/config/datastore/{name}'
-        try:
-            self._post(path, config)
-            logger.info(f"Datastore {name} created")
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to create datastore {name}: {e}")
-            raise
-
-    def list_backups(self, datastore):
-        """
-        List backups in a datastore.
-
-        :param datastore: Datastore name
-        :return: List of backup dictionaries
-        """
-        try:
-            backups = self._get(f'/datastore/{datastore}')
-            logger.info(f"Retrieved {len(backups['data'])} backups from {datastore}")
-            return backups['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to list backups in {datastore}: {e}")
-            raise
-
-    def restore_backup(self, datastore, backup_id, target):
-        """
-        Restore a backup from PBS.
-
-        :param datastore: Datastore name
-        :param backup_id: Backup ID
-        :param target: Restore target config
-        :return: UPID of the restore task
-        """
-        path = f'/datastore/{datastore}/restore/{backup_id}'
-        try:
-            result = self._post(path, target)
-            upid = result['data']
-            logger.info(f"Restore of backup {backup_id} from {datastore} initiated, UPID: {upid}")
-            return upid
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to restore backup {backup_id}: {e}")
-            raise
-
-    def delete_backup(self, datastore, backup_id):
-        """
-        Delete a backup from PBS.
-
-        :param datastore: Datastore name
-        :param backup_id: Backup ID
-        :return: None
-        """
-        path = f'/datastore/{datastore}/backup/{backup_id}'
-        try:
-            self._delete(path)
-            logger.info(f"Backup {backup_id} deleted from {datastore}")
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to delete backup {backup_id}: {e}")
-            raise
-
-    def list_tasks(self):
-        """
-        List PBS tasks.
-
-        :return: List of task dictionaries
-        """
-        try:
-            tasks = self._get('/tasks')
-            logger.info(f"Retrieved {len(tasks['data'])} tasks")
-            return tasks['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to list tasks: {e}")
-            raise
-
-    def sync_datastore(self, datastore, remote):
-        """
-        Sync datastore with remote.
-
-        :param datastore: Datastore name
-        :param remote: Remote config
-        :return: UPID of the sync task
-        """
-        path = f'/datastore/{datastore}/sync'
-        try:
-            result = self._post(path, remote)
-            upid = result['data']
-            logger.info(f"Sync of datastore {datastore} initiated, UPID: {upid}")
-            return upid
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to sync datastore {datastore}: {e}")
             raise
 
 
@@ -2392,9 +2132,6 @@ class VM:
 
     def firewall(self, node, vmid, is_lxc=False):
         return self.client.vm_firewall(node, vmid, is_lxc)
-
-    def rrd(self, node, vmid, timeframe='hour', is_lxc=False):
-        return self.client.vm_rrd(node, vmid, timeframe, is_lxc)
 
 
 class Storage:
@@ -2569,23 +2306,15 @@ class Cluster:
     def ha(self):
         return self.client.cluster_ha()
 
-    def ha_groups(self):
-        return self.client.cluster_ha_groups()
-
-    def ha_resources(self):
-        return self.client.cluster_ha_resources()
-
     def resources(self):
         return self.client.cluster_resources()
 
     def nextid(self):
         return self.client.cluster_nextid()
 
-    def rrd(self, timeframe='hour'):
-        return self.client.cluster_rrd(timeframe)
 
-    def logs(self, limit=50):
-        return self.client.cluster_logs(limit)
+    def nextid(self):
+        return self.client.cluster_nextid()
 
 
 class Access:
@@ -2667,9 +2396,6 @@ class Node:
     def subscription(self, node):
         return self.client.node_subscription(node)
 
-    def certificates(self, node):
-        return self.client.node_certificates(node)
-
     def syslog(self, node, limit=None):
         return self.client.node_syslog(node, limit)
 
@@ -2693,9 +2419,6 @@ class Node:
 
     def ceph(self, node):
         return self.client.node_ceph(node)
-
-    def rrd(self, node, timeframe='hour'):
-        return self.client.node_rrd(node, timeframe)
 
 
 # Task polling helper
