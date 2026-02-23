@@ -66,8 +66,14 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - **VM List Example (Discord Format):**
   - **Summary:** Retrieved 1 VM on node pve01.
   - **Details:** VM 100 (test-vm) is running, type qemu.
-  
+
   Full JSON: [{"vmid":100,"name":"test-vm","node":"pve01","status":"running","type":"qemu"}]
+
+- **Cluster Health Example (Discord Format):**
+  - **Summary:** Cluster is healthy with 2 nodes online.
+  - **Details:** HA managed resources: 0. Nodes pve01 and pve02 are online.
+
+  Full JSON: {"cluster":{"name":"test-cluster","version":"8.2-4","quorate":1,"nodes":[{"name":"pve01","online":1,"ip":"192.168.1.101"},{"name":"pve02","online":1,"ip":"192.168.1.102"}]},"ha":{"managed":0}}
 
 ### Output Formatting Policy
 Apply this globally to all commands and outputs (e.g., Proxmox, exec results, etc.). Preserve full context with no data loss in JSON representations.
