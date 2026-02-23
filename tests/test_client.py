@@ -516,3 +516,197 @@ class TestProxmoxClient:
 
         assert result is True
         assert mock_sleep.call_count == 1
+
+    # Phase 2 tests
+    @patch('client.requests.Session')
+    def test_vm_clone(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:clone:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_clone('node1', 101, 102, {'name': 'clone-vm'})
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:clone:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/clone', json={'newid': 102, 'name': 'clone-vm'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_snapshot_create(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:snapshot:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_snapshot_create('node1', 101, 'snap1', 'Test snapshot')
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:snapshot:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': 'snap1', 'description': 'Test snapshot'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_snapshot_list(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'name': 'snap1', 'description': 'Test'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        snapshots = client.vm_snapshot_list('node1', 101)
+
+        assert snapshots == [{'name': 'snap1', 'description': 'Test'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_snapshot_rollback(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:rollback:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_snapshot_rollback('node1', 101, 'snap1')
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:rollback:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot/snap1/rollback', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_snapshot_delete(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:delete:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_snapshot_delete('node1', 101, 'snap1')
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:delete:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot/snap1', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_migrate(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:migrate:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_migrate('node1', 101, 'node2', online=False)
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:migrate:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/migrate', json={'target': 'node2', 'online': 0}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_resize(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        client.vm_resize('node1', 101, 'scsi0', '+10G')
+
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/resize', json={'disk': 'scsi0', 'size': '+10G'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_move_volume(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:move:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_move_volume('node1', 101, 'scsi0', 'nfs')
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:move:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/move_disk', json={'disk': 'scsi0', 'storage': 'nfs'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_template(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        client.vm_template('node1', 101)
+
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/template', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_vncproxy(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': {'port': 5900, 'ticket': 'ticket123'}}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        proxy = client.vm_vncproxy('node1', 101)
+
+        assert proxy == {'port': 5900, 'ticket': 'ticket123'}
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/vncproxy', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_spiceproxy(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': {'proxy': 'spice://host:port'}}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        proxy = client.vm_spiceproxy('node1', 101)
+
+        assert proxy == {'proxy': 'spice://host:port'}
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/spiceproxy', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_monitor(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'OK'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        response = client.vm_monitor('node1', 101, 'info version')
+
+        assert response == 'OK'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/monitor', json={'command': 'info version'}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_firewall(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': [{'type': 'in', 'action': 'ACCEPT'}]}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        rules = client.vm_firewall('node1', 101)
+
+        assert rules == [{'type': 'in', 'action': 'ACCEPT'}]
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/firewall/rules', params=None, verify=True, timeout=30)

@@ -53,7 +53,7 @@ class ProxmoxClient:
         try:
             self._get('/version')
             logger.info("Authentication successful")
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             raise ProxmoxAuthError(f"Authentication failed: {e}")
 
     def _get(self, path, params=None):
@@ -75,7 +75,7 @@ class ProxmoxClient:
             raise ProxmoxAPIError("SSL verification failed")
         except requests.exceptions.HTTPError as e:
             raise ProxmoxAPIError(f"HTTP {e.response.status_code}: {e.response.text}")
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             raise ProxmoxAPIError(f"Request failed: {e}")
 
     def _post(self, path, data=None):
@@ -97,7 +97,7 @@ class ProxmoxClient:
             raise ProxmoxAPIError("SSL verification failed")
         except requests.exceptions.HTTPError as e:
             raise ProxmoxAPIError(f"HTTP {e.response.status_code}: {e.response.text}")
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             raise ProxmoxAPIError(f"Request failed: {e}")
 
     def list_vms(self):
@@ -507,12 +507,12 @@ class ProxmoxClient:
             raise
 
     # Advanced VM operations
-    def vm_clone(self, vmid, node, newid, config=None, is_lxc=False):
+    def vm_clone(self, node, vmid, newid, config=None, is_lxc=False):
         """
         Clone a VM.
 
-        :param vmid: Source VM ID
         :param node: Source node name
+        :param vmid: Source VM ID
         :param newid: New VM ID
         :param config: Optional configuration overrides
         :param is_lxc: True if LXC, False for QEMU
@@ -532,12 +532,12 @@ class ProxmoxClient:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, vmid, node, snapname, description=None, is_lxc=False):
+    def vm_snapshot_create(self, node, vmid, snapname, description=None, is_lxc=False):
         """
         Create a VM snapshot.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param snapname: Snapshot name
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
@@ -557,12 +557,12 @@ class ProxmoxClient:
             logger.error(f"Failed to create snapshot for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_list(self, vmid, node, is_lxc=False):
+    def vm_snapshot_list(self, node, vmid, is_lxc=False):
         """
         List VM snapshots.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
         :return: List of snapshots
         """
@@ -576,12 +576,12 @@ class ProxmoxClient:
             logger.error(f"Failed to list snapshots for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_rollback(self, vmid, node, snapname, is_lxc=False):
+    def vm_snapshot_rollback(self, node, vmid, snapname, is_lxc=False):
         """
         Rollback VM to a snapshot.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param snapname: Snapshot name
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the rollback task
@@ -597,12 +597,12 @@ class ProxmoxClient:
             logger.error(f"Failed to rollback {vm_type} {vmid} to snapshot '{snapname}': {e}")
             raise
 
-    def vm_snapshot_delete(self, vmid, node, snapname, is_lxc=False):
+    def vm_snapshot_delete(self, node, vmid, snapname, is_lxc=False):
         """
         Delete a VM snapshot.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param snapname: Snapshot name
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the delete task
@@ -618,12 +618,12 @@ class ProxmoxClient:
             logger.error(f"Failed to delete snapshot '{snapname}' for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_migrate(self, vmid, node, target_node, online=True, is_lxc=False):
+    def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False):
         """
         Migrate VM to another node.
 
-        :param vmid: VM ID
         :param node: Source node name
+        :param vmid: VM ID
         :param target_node: Target node name
         :param online: True for online migration, False for offline
         :param is_lxc: True if LXC, False for QEMU
@@ -641,12 +641,12 @@ class ProxmoxClient:
             logger.error(f"Failed to migrate {vm_type} {vmid}: {e}")
             raise
 
-    def vm_resize(self, vmid, node, disk, size, is_lxc=False):
+    def vm_resize(self, node, vmid, disk, size, is_lxc=False):
         """
         Resize VM disk.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param disk: Disk identifier (e.g., 'scsi0')
         :param size: New size (e.g., '+10G')
         :param is_lxc: True if LXC, False for QEMU
@@ -662,20 +662,20 @@ class ProxmoxClient:
             logger.error(f"Failed to resize disk for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_move_volume(self, vmid, node, volume, storage, is_lxc=False):
+    def vm_move_volume(self, node, vmid, volume, storage, is_lxc=False):
         """
         Move VM volume to different storage.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param volume: Volume identifier
         :param storage: Target storage ID
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the move task
         """
         vm_type = 'lxc' if is_lxc else 'qemu'
-        path = f'/nodes/{node}/{vm_type}/{vmid}/move_volume'
-        data = {'volume': volume, 'storage': storage}
+        path = f'/nodes/{node}/{vm_type}/{vmid}/{"move_disk" if vm_type == "qemu" else "move_volume"}'
+        data = {'disk' if vm_type == 'qemu' else 'volume': volume, 'storage': storage}
         try:
             result = self._post(path, data)
             upid = result['data']
@@ -685,12 +685,12 @@ class ProxmoxClient:
             logger.error(f"Failed to move volume for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_template(self, vmid, node, is_lxc=False):
+    def vm_template(self, node, vmid, is_lxc=False):
         """
         Convert VM to template.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
         :return: None
         """
@@ -703,12 +703,12 @@ class ProxmoxClient:
             logger.error(f"Failed to convert {vm_type} {vmid} to template: {e}")
             raise
 
-    def vm_vncproxy(self, vmid, node, is_lxc=False):
+    def vm_vncproxy(self, node, vmid, is_lxc=False):
         """
         Get VNC proxy for VM.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
         :return: VNC proxy data
         """
@@ -722,12 +722,12 @@ class ProxmoxClient:
             logger.error(f"Failed to get VNC proxy for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_spiceproxy(self, vmid, node, is_lxc=False):
+    def vm_spiceproxy(self, node, vmid, is_lxc=False):
         """
         Get SPICE proxy for VM.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
         :return: SPICE proxy data
         """
@@ -741,12 +741,12 @@ class ProxmoxClient:
             logger.error(f"Failed to get SPICE proxy for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_monitor(self, vmid, node, command, is_lxc=False):
+    def vm_monitor(self, node, vmid, command, is_lxc=False):
         """
         Send monitor command to VM.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param command: Monitor command
         :param is_lxc: True if LXC, False for QEMU
         :return: Monitor response
@@ -762,12 +762,12 @@ class ProxmoxClient:
             logger.error(f"Failed to send monitor command to {vm_type} {vmid}: {e}")
             raise
 
-    def vm_firewall(self, vmid, node, is_lxc=False):
+    def vm_firewall(self, node, vmid, is_lxc=False):
         """
         Get VM firewall rules.
 
-        :param vmid: VM ID
         :param node: Node name
+        :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
         :return: Firewall rules
         """
@@ -1226,24 +1226,25 @@ class VM:
                 vm['node'] = node
             return vms
         else:
-            return self.client.list_vms()
+            vms = self.client.list_vms()
+            return [vm for vm in vms if vm['type'] == 'qemu']
 
-    def status(self, vmid, node, is_lxc=False):
+    def status(self, node, vmid, is_lxc=False):
         return self.client.get_vm_status(node, vmid, is_lxc)
 
-    def start(self, vmid, node, is_lxc=False):
+    def start(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'start', vm_type=vm_type)
 
-    def stop(self, vmid, node, is_lxc=False):
+    def stop(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'stop', vm_type=vm_type)
 
-    def reboot(self, vmid, node, is_lxc=False):
+    def reboot(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'reboot', vm_type=vm_type)
 
-    def shutdown(self, vmid, node, is_lxc=False, timeout=None):
+    def shutdown(self, node, vmid, is_lxc=False, timeout=None):
         vm_type = 'lxc' if is_lxc else 'qemu'
         kwargs = {}
         if timeout:

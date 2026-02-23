@@ -74,31 +74,36 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
    - Error handling and logging improved throughout.
    - Requires pydantic>=1.8.0 added to requirements.txt.
 
-### Phase 2: Advanced VM and Container Features (High Priority)
+### Phase 2: Advanced VM and Container Features (High Priority) ✅
 
-7. **Implement Advanced VM Operations**
-   - `vm_clone(vmid, node, newid, config)`: Clone a VM.
-   - `vm_snapshot_create(vmid, node, snapname)`: Create VM snapshot.
-   - `vm_snapshot_list(vmid, node)`: List VM snapshots.
-   - `vm_snapshot_rollback(vmid, node, snapname)`: Rollback to snapshot.
-   - `vm_snapshot_delete(vmid, node, snapname)`: Delete snapshot.
-   - `vm_migrate(vmid, node, target_node)`: Migrate VM to another node.
-   - `vm_resize(vmid, node, disk, size)`: Resize VM disk.
-   - `vm_move_volume(vmid, node, volume, storage)`: Move VM volume to different storage.
-   - `vm_template(vmid, node)`: Convert VM to template.
-   - `vm_vncproxy(vmid, node)`: Get VNC proxy for VM.
-   - `vm_spiceproxy(vmid, node)`: Get SPICE proxy for VM.
-   - `vm_monitor(vmid, node, command)`: Send monitor command to VM.
-   - `vm_firewall(vmid, node)`: Manage VM firewall rules.
+7. **Implement Advanced VM Operations** ✅
+   - `vm_clone(vmid, node, newid, config)`: Clone a VM. ✅ (via VM.clone())
+   - `vm_snapshot_create(vmid, node, snapname)`: Create VM snapshot. ✅ (via VM.snapshot_create())
+   - `vm_snapshot_list(vmid, node)`: List VM snapshots. ✅ (via VM.snapshot_list())
+   - `vm_snapshot_rollback(vmid, node, snapname)`: Rollback to snapshot. ✅ (via VM.snapshot_rollback())
+   - `vm_snapshot_delete(vmid, node, snapname)`: Delete snapshot. ✅ (via VM.snapshot_delete())
+   - `vm_migrate(vmid, node, target_node)`: Migrate VM to another node. ✅ (via VM.migrate())
+   - `vm_resize(vmid, node, disk, size)`: Resize VM disk. ✅ (via VM.resize())
+   - `vm_move_volume(vmid, node, volume, storage)`: Move VM volume to different storage. ✅ (via VM.move_volume())
+   - `vm_template(vmid, node)`: Convert VM to template. ✅ (via VM.template())
+   - `vm_vncproxy(vmid, node)`: Get VNC proxy for VM. ✅ (via VM.vncproxy())
+   - `vm_spiceproxy(vmid, node)`: Get SPICE proxy for VM. ✅ (via VM.spiceproxy())
+   - `vm_monitor(vmid, node, command)`: Send monitor command to VM. ✅ (via VM.monitor())
+   - `vm_firewall(vmid, node)`: Manage VM firewall rules. ✅ (via VM.firewall())
 
-8. **Implement Container Operations (LXC)**
-   - All basic operations similar to VMs: list, status, start, stop, reboot, shutdown, create, delete, config_get, config_set.
-   - `container_clone(vmid, node, newid)`: Clone a container.
-   - `container_snapshot_*`: Snapshot operations.
-   - `container_migrate(vmid, node, target_node)`: Migrate container.
-   - `container_template(vmid, node)`: Convert to template.
-   - `container_firewall(vmid, node)`: Firewall management.
-   - `container_vncproxy`, `container_spiceproxy`: Proxy access.
+8. **Implement Container Operations (LXC)** ✅
+   - All basic operations similar to VMs: list, status, start, stop, reboot, shutdown, create, delete, config_get, config_set. ✅ (via Container class)
+   - `container_clone(vmid, node, newid)`: Clone a container. ✅ (via Container.clone())
+   - `container_snapshot_*`: Snapshot operations. ✅ (via Container.snapshot_*)
+   - `container_migrate(vmid, node, target_node)`: Migrate container. ✅ (via Container.migrate())
+   - `container_template(vmid, node)`: Convert to template. ✅ (via Container.template())
+   - `container_firewall(vmid, node)`: Firewall management. ✅ (via Container.firewall())
+   - `container_vncproxy`, `container_spiceproxy`: Proxy access. ✅ (via Container.vncproxy/spiceproxy)
+
+   **Notes for Phase 2:**
+   - Added Container class inheriting from VM for dedicated LXC operations.
+   - All advanced operations support both QEMU (VM) and LXC (Container).
+   - Maintained consistent API and error handling.
 
 ### Phase 3: Secondary Features (Medium Priority)
 
