@@ -70,4 +70,5 @@ Run `pytest` in the skill directory for unit tests with mocks.
 ### PAM Authentication Notes
 - **PAM users (@pam)** map to **Linux system users**—run `useradd username` on Proxmox host first (PVE UI alone insufficient).
 - **403 Sys.Audit (/)**? Token lacks privs: UI → Datacenter → Permissions → API Tokens → Edit token → Add **Role `PVEAudit`** path `/` (or User ACL priv `Sys.Audit` /).
-- **Multi-cluster/large env**: Prefer LDAP/external realms over PAM (better scaling/auth delegation)."
+- **Multi-cluster/large env**: Prefer LDAP/external realms over PAM (better scaling/auth delegation).
+- **Video/Console Access**: Use noVNC for remote VM console; ensure API token has VM.Console privilege on the VM path."
