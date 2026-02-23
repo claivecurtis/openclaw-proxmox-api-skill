@@ -1226,24 +1226,25 @@ class VM:
                 vm['node'] = node
             return vms
         else:
-            return self.client.list_vms()
+            vms = self.client.list_vms()
+            return [vm for vm in vms if vm['type'] == 'qemu']
 
-    def status(self, vmid, node, is_lxc=False):
+    def status(self, node, vmid, is_lxc=False):
         return self.client.get_vm_status(node, vmid, is_lxc)
 
-    def start(self, vmid, node, is_lxc=False):
+    def start(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'start', vm_type=vm_type)
 
-    def stop(self, vmid, node, is_lxc=False):
+    def stop(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'stop', vm_type=vm_type)
 
-    def reboot(self, vmid, node, is_lxc=False):
+    def reboot(self, node, vmid, is_lxc=False):
         vm_type = 'lxc' if is_lxc else 'qemu'
         return self.client.vm_action(node, vmid, 'reboot', vm_type=vm_type)
 
-    def shutdown(self, vmid, node, is_lxc=False, timeout=None):
+    def shutdown(self, node, vmid, is_lxc=False, timeout=None):
         vm_type = 'lxc' if is_lxc else 'qemu'
         kwargs = {}
         if timeout:
