@@ -61,6 +61,9 @@ exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" 
 ```
 Expected: `Auth OK` (no PII/hosts).
 
+### Output Formatting
+Discord: Use AGENTS.md policy (bullets + full JSON compact, no loss). Raw for web/TUI.
+
 ## Dependencies
 See `requirements.txt` for Python packages.
 
