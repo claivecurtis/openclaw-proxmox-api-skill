@@ -328,6 +328,80 @@ class ProxmoxClient:
             logger.error(f"Failed to delete resource pool '{pool}': {e}")
             raise
 
+    # Cluster operations
+    def cluster_status(self):
+        """
+        Get cluster status.
+
+        :return: Cluster status data
+        """
+        return self._get('/cluster/status')
+
+    def cluster_tasks(self):
+        """
+        Get cluster tasks.
+
+        :return: List of cluster tasks
+        """
+        return self._get('/cluster/tasks')
+
+    def cluster_logs(self, limit=None):
+        """
+        Get cluster logs.
+
+        :param limit: Maximum number of log entries to return
+        :return: Cluster log entries
+        """
+        params = {}
+        if limit:
+            params['limit'] = limit
+        return self._get('/cluster/log', params)
+
+    def cluster_backup(self):
+        """
+        Get cluster backup status.
+
+        :return: Cluster backup information
+        """
+        return self._get('/cluster/backup')
+
+    # Node operations
+    def node_status(self, node):
+        """
+        Get node status.
+
+        :param node: Node name
+        :return: Node status data
+        """
+        return self._get(f'/nodes/{node}/status')
+
+    def node_tasks(self, node):
+        """
+        Get node tasks.
+
+        :param node: Node name
+        :return: List of node tasks
+        """
+        return self._get(f'/nodes/{node}/tasks')
+
+    def node_services(self, node):
+        """
+        Get node services.
+
+        :param node: Node name
+        :return: List of node services
+        """
+        return self._get(f'/nodes/{node}/services')
+
+    def node_storage(self, node):
+        """
+        Get node storage.
+
+        :param node: Node name
+        :return: List of node storage
+        """
+        return self._get(f'/nodes/{node}/storage')
+
     def get_vm_status(self, node, vmid, is_lxc=False):
         """
         Get full status of a VM.
@@ -679,6 +753,46 @@ class Pool:
 
     def delete(self, pool):
         return self.client.pool_delete(pool)
+
+
+class Cluster:
+    """
+    Wrapper class for Cluster operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def status(self):
+        return self.client.cluster_status()
+
+    def tasks(self):
+        return self.client.cluster_tasks()
+
+    def logs(self, limit=None):
+        return self.client.cluster_logs(limit)
+
+    def backup(self):
+        return self.client.cluster_backup()
+
+
+class Node:
+    """
+    Wrapper class for Node operations.
+    """
+    def __init__(self, client: ProxmoxClient):
+        self.client = client
+
+    def status(self, node):
+        return self.client.node_status(node)
+
+    def tasks(self, node):
+        return self.client.node_tasks(node)
+
+    def services(self, node):
+        return self.client.node_services(node)
+
+    def storage(self, node):
+        return self.client.node_storage(node)
 
 
 # Task polling helper
