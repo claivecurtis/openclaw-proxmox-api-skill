@@ -26,6 +26,8 @@ See [SKILL.md](SKILL.md) for triggers and workflows.
 Run example scripts in `examples/`:
 - `python examples/list_vms.py` - List all VMs/LXCs
 - `python examples/vm_start.py node1 101` - Start VM 101 on node1
+- `python examples/vm_snapshot.py node1 101 snap1 "My snapshot"` - Create snapshot for VM 101
+- `python examples/vm_clone.py node1 101 102` - Clone VM 101 to 102
 
 ### API Endpoints (Initial Scope)
 | Function | Method | Path |
