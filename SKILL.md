@@ -72,4 +72,4 @@ Run `pytest` in the skill directory for unit tests with mocks.
 - **403 Sys.Audit (/)**? Token lacks privs: UI → Datacenter → Permissions → API Tokens → Edit token → Add **Role `PVEAudit`** path `/` (or User ACL priv `Sys.Audit` /).
 - **Multi-cluster/large env**: Prefer LDAP/external realms over PAM (better scaling/auth delegation).
 - **Video/Console Access**: Use noVNC for remote VM console; ensure API token has VM.Console privilege on the VM path.
-- **Video**: https://youtube.com/watch?v=DLH_j1CAj44 (perms context)."
+- **Video**: https://youtube.com/watch?v=DLh_j1CAj44 (perms context)."
