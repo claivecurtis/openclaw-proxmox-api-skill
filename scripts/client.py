@@ -79,6 +79,7 @@ class ProxmoxConfig(BaseModel):
     verify_ssl: bool = True
     token_path: Optional[str] = None
     timeout: int = 30
+    auto_poll: bool = True
 
 class ProxmoxAuthError(Exception):
     pass
@@ -90,17 +91,21 @@ class TaskTimeoutError(Exception):
     pass
 
 class ProxmoxClient:
-    def __init__(self, host, token, verify_ssl=True):
+    def __init__(self, host, token, verify_ssl=True, timeout=30, auto_poll=True):
         """
         Initialize the Proxmox API client.
 
         :param host: Proxmox host (e.g., 'pve.example.com')
         :param token: API token in 'user@realm!tokenid=secret' format
         :param verify_ssl: Whether to verify SSL certificates
+        :param timeout: Request timeout in seconds
+        :param auto_poll: Default auto-polling for async tasks
         """
         self.host = host
         self.token = token
         self.verify_ssl = verify_ssl
+        self.timeout = timeout
+        self.auto_poll = auto_poll
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'PVEAPIToken={token}',
@@ -123,7 +128,7 @@ class ProxmoxClient:
         """
         url = f"https://{self.host}:8006/api2/json{path}"
         try:
-            resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=30)
+            resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -145,7 +150,7 @@ class ProxmoxClient:
         """
         url = f"https://{self.host}:8006/api2/json{path}"
         try:
-            resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=30)
+            resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -166,7 +171,7 @@ class ProxmoxClient:
         """
         url = f"https://{self.host}:8006/api2/json{path}"
         try:
-            resp = self.session.delete(url, verify=self.verify_ssl, timeout=30)
+            resp = self.session.delete(url, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -229,7 +234,7 @@ class ProxmoxClient:
             logger.error(f"Failed to list VMs: {e}")
             raise
 
-    def vm_action(self, node, vmid, action, vm_type='qemu', auto_poll=False, **kwargs):
+    def vm_action(self, node, vmid, action, vm_type='qemu', auto_poll=None, **kwargs):
         """
         Perform an action on a VM or LXC (e.g., start, stop, reboot).
 
@@ -237,10 +242,12 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param action: Action (start, stop, reboot, etc.)
         :param vm_type: 'qemu' or 'lxc'
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :param kwargs: Additional parameters (e.g., timeout for shutdown)
         :return: UPID if asynchronous and not auto_poll, status dict if auto_poll, None if synchronous
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         path = f'/nodes/{node}/{vm_type}/{vmid}/status/{action}'
         try:
             result = self._post(path, kwargs)
@@ -404,18 +411,25 @@ class ProxmoxClient:
             logger.error(f"Failed to get RRD data for storage {storage}: {e}")
             raise
 
-    def storage_scan(self, storage):
+    def storage_scan(self, storage, auto_poll=None):
         """
         Scan storage for content.
 
         :param storage: Storage ID
-        :return: Scan result
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         path = f'/storage/{storage}/scan'
         try:
             result = self._post(path, {})
-            logger.info(f"Scanned storage {storage}")
-            return result['data']
+            upid = result['data']
+            logger.info(f"Scanned storage {storage}, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_cluster_task(upid)
+                return {'upid': upid, **poll_result}
+            return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to scan storage {storage}: {e}")
             raise
@@ -1055,13 +1069,14 @@ class ProxmoxClient:
             logger.error(f"Failed to create SPICE shell for node {node}: {e}")
             raise
 
-    def node_migrateall(self, node, target):
+    def node_migrateall(self, node, target, auto_poll=True):
         """
         Migrate all VMs/containers from node.
 
         :param node: Source node name
         :param target: Target node name
-        :return: UPID of the migration task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/migrateall'
         data = {'target': target}
@@ -1069,40 +1084,51 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Migrate all from node {node} to {target} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to migrate all from node {node}: {e}")
             raise
 
-    def node_startall(self, node):
+    def node_startall(self, node, auto_poll=True):
         """
         Start all VMs/containers on node.
 
         :param node: Node name
-        :return: UPID of the start task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/startall'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Start all on node {node} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to start all on node {node}: {e}")
             raise
 
-    def node_stopall(self, node):
+    def node_stopall(self, node, auto_poll=True):
         """
         Stop all VMs/containers on node.
 
         :param node: Node name
-        :return: UPID of the stop task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/stopall'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Stop all on node {node} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to stop all on node {node}: {e}")
@@ -1144,7 +1170,7 @@ class ProxmoxClient:
             logger.error(f"Failed to get status for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_create(self, node, vmid, config, is_lxc=False, auto_poll=False):
+    def vm_create(self, node, vmid, config, is_lxc=False, auto_poll=None):
         """
         Create a new VM.
 
@@ -1152,9 +1178,11 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param config: VM configuration dictionary
         :param is_lxc: True if LXC, False for QEMU
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
         # Idempotency check: ensure VM does not already exist
@@ -1179,16 +1207,18 @@ class ProxmoxClient:
             logger.error(f"Failed to create VM {vmid}: {e}")
             raise
 
-    def vm_delete(self, node, vmid, is_lxc=False, auto_poll=False):
+    def vm_delete(self, node, vmid, is_lxc=False, auto_poll=None):
         """
         Delete a VM.
 
         :param node: Node name
         :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll and async, status dict if auto_poll, None if sync or not exists
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
         # Idempotency check: ensure VM exists
@@ -1257,7 +1287,7 @@ class ProxmoxClient:
             raise
 
     # Advanced VM operations
-    def vm_clone(self, node, vmid, newid, config=None, is_lxc=False, auto_poll=False):
+    def vm_clone(self, node, vmid, newid, config=None, is_lxc=False, auto_poll=None):
         """
         Clone a VM.
 
@@ -1266,9 +1296,11 @@ class ProxmoxClient:
         :param newid: New VM ID
         :param config: Optional configuration overrides
         :param is_lxc: True if LXC, False for QEMU
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/clone'
         data = {'newid': newid}
@@ -1286,7 +1318,7 @@ class ProxmoxClient:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False, auto_poll=False):
+    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False, auto_poll=None):
         """
         Create a VM snapshot.
 
@@ -1297,9 +1329,11 @@ class ProxmoxClient:
         :param is_lxc: True if LXC, False for QEMU
         :param change_number: Optional change number for custom naming
         :param interactive: If True, prompt for confirmation of generated name
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
         settings = load_settings(interactive=interactive)
@@ -1384,7 +1418,7 @@ class ProxmoxClient:
             logger.error(f"Failed to rollback {vm_type} {vmid} to snapshot '{snapname}': {e}")
             raise
 
-    def vm_snapshot_delete(self, node, vmid, snapname, is_lxc=False):
+    def vm_snapshot_delete(self, node, vmid, snapname, is_lxc=False, auto_poll=None):
         """
         Delete a VM snapshot.
 
@@ -1392,20 +1426,26 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param snapname: Snapshot name
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the delete task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/snapshot/{snapname}'
         try:
             result = self._delete(path)
             upid = result['data']
             logger.info(f"Deletion of snapshot '{snapname}' for {vm_type} {vmid} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to delete snapshot '{snapname}' for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False, auto_poll=False):
+    def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False, auto_poll=None):
         """
         Migrate VM to another node.
 
@@ -1414,9 +1454,11 @@ class ProxmoxClient:
         :param target_node: Target node name
         :param online: True for online migration, False for offline
         :param is_lxc: True if LXC, False for QEMU
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/migrate'
         data = {'target': target_node, 'online': int(online)}
@@ -1453,7 +1495,7 @@ class ProxmoxClient:
             logger.error(f"Failed to resize disk for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_move_volume(self, node, vmid, volume, storage, is_lxc=False, auto_poll=False):
+    def vm_move_volume(self, node, vmid, volume, storage, is_lxc=False, auto_poll=None):
         """
         Move VM volume to different storage.
 
@@ -1462,9 +1504,11 @@ class ProxmoxClient:
         :param volume: Volume identifier
         :param storage: Target storage ID
         :param is_lxc: True if LXC, False for QEMU
-        :param auto_poll: If True, poll the task until completion and return status dict
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/{"move_disk" if vm_type == "qemu" else "move_volume"}'
         data = {'disk' if vm_type == 'qemu' else 'volume': volume, 'storage': storage}
@@ -1599,7 +1643,7 @@ class ProxmoxClient:
 
     def poll_task(self, node, upid, timeout=300, poll_interval=5):
         """
-        Poll a task until completion.
+        Poll a node task until completion.
 
         :param node: Node name
         :param upid: Unique Process ID
@@ -1636,6 +1680,45 @@ class ProxmoxClient:
             except ProxmoxAPIError:
                 raise
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
+
+    def poll_cluster_task(self, upid, timeout=300, poll_interval=5):
+        """
+        Poll a cluster task until completion.
+
+        :param upid: Unique Process ID
+        :param timeout: Timeout in seconds
+        :param poll_interval: Initial polling interval in seconds (with backoff)
+        :return: Dict with 'success', 'exitstatus', 'status'
+        """
+        path = f'/cluster/tasks/{upid}/status'
+        start_time = time.time()
+        current_interval = poll_interval
+        while time.time() - start_time < timeout:
+            try:
+                status = self._get(path)
+                task_status = status['data']['status']
+                exitstatus = status['data'].get('exitstatus', 'OK')
+                if task_status == 'stopped':
+                    success = exitstatus == 'OK'
+                    if success:
+                        logger.info(f"Cluster task {upid} completed successfully")
+                    else:
+                        logger.error(f"Cluster task {upid} failed with exitstatus: {exitstatus}")
+                    return {'success': success, 'exitstatus': exitstatus, 'status': 'stopped'}
+                elif task_status == 'running':
+                    logger.debug(f"Cluster task {upid} still running...")
+                else:
+                    logger.warning(f"Cluster task {upid} in unknown status: {task_status}")
+                time.sleep(min(current_interval, 30))
+                current_interval *= 1.5
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    raise ProxmoxAPIError(f"Cluster task {upid} not found")
+                else:
+                    raise
+            except ProxmoxAPIError:
+                raise
+        raise TaskTimeoutError(f"Cluster task {upid} timed out after {timeout} seconds")
 
     # Phase 3: Access Control
     def user_create(self, userid, config):
@@ -2851,9 +2934,11 @@ def load_client():
         config = ProxmoxConfig()
         config.host = raw_config['proxmox'].get('host')
         config.verify_ssl = raw_config['proxmox'].get('verify_ssl', True)
+        config.timeout = raw_config['proxmox'].get('timeout', 30)
+        config.auto_poll = raw_config['proxmox'].get('auto_poll', True)
 
     # Load token
     with open(token_path, 'r') as f:
         token = f.read().strip()
 
-    return ProxmoxClient(config.host, token, config.verify_ssl)
+    return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
