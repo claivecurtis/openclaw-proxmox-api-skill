@@ -3,6 +3,7 @@ import json
 import time
 import logging
 import os
+import re
 from typing import Dict, List, Optional, Any
 try:
     from pydantic import BaseModel, ValidationError
@@ -15,6 +16,9 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Snapshot name validation regex: starts with letter, followed by letters, numbers, hyphens, underscores
+NAME_REGEX = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]*$')
 
 # Config validation
 class ProxmoxConfig(BaseModel):
@@ -1205,11 +1209,14 @@ class ProxmoxClient:
 
         :param node: Node name
         :param vmid: VM ID
-        :param snapname: Snapshot name
+        :param snapname: Snapshot name (validated: starts with letter, only letters/numbers/hyphens/underscores)
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the snapshot task
         """
+        # Pre-validate snapshot name
+        if not NAME_REGEX.match(snapname):
+            raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/snapshot'
         data = {'snapname': snapname}
