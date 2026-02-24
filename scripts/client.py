@@ -14,12 +14,22 @@ except ImportError:
     ValidationError = Exception
 
 # Load settings
-def load_settings():
+def load_settings(interactive=False):
     settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
     if os.path.exists(settings_path):
         with open(settings_path, 'r') as f:
             return json.load(f)
-    return {"next_snap_number": 1, "naming_convention": "aiagent-snap-{number:04d}"}
+    else:
+        if interactive:
+            default = "aiagent-snap-{number:04d}"
+            user_input = input(f"Naming convention? (default {default}) [input] ").strip()
+            convention = user_input if user_input else default
+            settings = {"naming_convention": convention, "next_snap_number": 1}
+            with open(settings_path, 'w') as f:
+                json.dump(settings, f, indent=2)
+            return settings
+        else:
+            return {"next_snap_number": 1, "naming_convention": "aiagent-snap-{number:04d}"}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1224,7 +1234,7 @@ class ProxmoxClient:
         :param interactive: If True, prompt for confirmation of generated name
         :return: UPID of the snapshot task
         """
-        settings = load_settings()
+        settings = load_settings(interactive=interactive)
         if snapname is None:
             if change_number is not None:
                 snapname = f"aiagent-snap-{change_number}"
