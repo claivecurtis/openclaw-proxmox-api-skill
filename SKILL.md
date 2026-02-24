@@ -15,8 +15,15 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 ### Prerequisites
 1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
-2. Store token in `skill/secrets/pve-token.txt`.
-3. `cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml && edit`
+2. Store the API token in `skill/secrets/pve-token.txt` (file created if it doesn't exist).
+3. Run the following commands to set up secrets files idempotently (skip if exist):
+
+   ```bash
+   [ ! -f skill/secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml
+   [ ! -f skill/secrets/pve-token.txt ] && touch skill/secrets/pve-token.txt
+   ```
+
+   Then, edit `skill/secrets/config.proxmox.yaml` with your Proxmox details.
 
 ### Workflows
 
