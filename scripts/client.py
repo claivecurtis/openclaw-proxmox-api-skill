@@ -4,6 +4,7 @@ import time
 import logging
 import os
 import re
+import threading
 from typing import Dict, List, Optional, Any
 try:
     from pydantic import BaseModel, ValidationError
@@ -13,23 +14,36 @@ except ImportError:
     BaseModel = object
     ValidationError = Exception
 
-# Load settings
+# Global settings lock for thread safety
+settings_lock = threading.Lock()
+
+# Default settings
+DEFAULT_SETTINGS = {
+    "naming_convention": "aiagent-snap-{number:04d}",
+    "next_snap_number": 1
+}
+
+# Load settings with thread lock and global defaults
 def load_settings(interactive=False):
     settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
-    if os.path.exists(settings_path):
-        with open(settings_path, 'r') as f:
-            return json.load(f)
-    else:
-        if interactive:
-            default = "aiagent-snap-{number:04d}"
-            user_input = input(f"Naming convention? (default {default}) [input] ").strip()
-            convention = user_input if user_input else default
-            settings = {"naming_convention": convention, "next_snap_number": 1}
-            with open(settings_path, 'w') as f:
-                json.dump(settings, f, indent=2)
-            return settings
+    with settings_lock:
+        if os.path.exists(settings_path):
+            with open(settings_path, 'r') as f:
+                return json.load(f)
         else:
-            return {"next_snap_number": 1, "naming_convention": "aiagent-snap-{number:04d}"}
+            if interactive:
+                default = DEFAULT_SETTINGS["naming_convention"]
+                user_input = input(f"Naming convention? (default {default}) [input] ").strip()
+                convention = user_input if user_input else default
+                settings = {"naming_convention": convention, "next_snap_number": DEFAULT_SETTINGS["next_snap_number"]}
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                return settings
+            else:
+                settings = DEFAULT_SETTINGS.copy()
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                return settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1508,11 +1522,12 @@ class ProxmoxClient:
         :param node: Node name
         :param upid: Unique Process ID
         :param timeout: Timeout in seconds
-        :param poll_interval: Polling interval in seconds
+        :param poll_interval: Initial polling interval in seconds (with backoff)
         :return: True if successful, raises exception otherwise
         """
         path = f'/nodes/{node}/tasks/{upid}/status'
         start_time = time.time()
+        current_interval = poll_interval
         while time.time() - start_time < timeout:
             try:
                 status = self._get(path)
@@ -1530,7 +1545,8 @@ class ProxmoxClient:
                     logger.debug(f"Task {upid} still running...")
                 else:
                     logger.warning(f"Task {upid} in unknown status: {task_status}")
-                time.sleep(poll_interval)
+                time.sleep(min(current_interval, 30))
+                current_interval *= 1.5
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 404:
                     raise ProxmoxAPIError(f"Task {upid} not found")
@@ -2494,20 +2510,20 @@ class Container(VM):
             containers = [r for r in resources['data'] if r['type'] == 'lxc']
             return containers
 
-    def status(self, vmid, node):
-        return super().status(vmid, node, is_lxc=True)
+    def status(self, node, vmid):
+        return super().status(node, vmid, is_lxc=True)
 
-    def start(self, vmid, node):
-        return super().start(vmid, node, is_lxc=True)
+    def start(self, node, vmid):
+        return super().start(node, vmid, is_lxc=True)
 
-    def stop(self, vmid, node):
-        return super().stop(vmid, node, is_lxc=True)
+    def stop(self, node, vmid):
+        return super().stop(node, vmid, is_lxc=True)
 
-    def reboot(self, vmid, node):
-        return super().reboot(vmid, node, is_lxc=True)
+    def reboot(self, node, vmid):
+        return super().reboot(node, vmid, is_lxc=True)
 
-    def shutdown(self, vmid, node, timeout=None):
-        return super().shutdown(vmid, node, is_lxc=True, timeout=timeout)
+    def shutdown(self, node, vmid, timeout=None):
+        return super().shutdown(node, vmid, is_lxc=True, timeout=timeout)
 
     def create(self, node, vmid, config):
         return super().create(node, vmid, config, is_lxc=True)
