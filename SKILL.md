@@ -54,9 +54,9 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - **Script:** `scripts/client.py` `vm_snapshot_create(node, vmid, snapname=None, change_number=None)`
 - **Description:** Creates a snapshot with automatic naming if not specified. Uses "aiagent-snap-NNNN" convention or custom "aiagent-snap-{change_number}".
 - **Examples:**
-  - Auto-generate name: `vm_snapshot_create('node1', 126)`
-  - Custom change number: `vm_snapshot_create('node1', 126, change_number=1234)`
-  - Manual name: `vm_snapshot_create('node1', 126, snapname='my-snapshot')`
+  - Auto-generate name: `vm_snapshot_create('<node>', <vmid>)`
+  - Custom change number: `vm_snapshot_create('<node>', <vmid>, change_number=1234)`
+  - Manual name: `vm_snapshot_create('<node>', <vmid>, snapname='my-snapshot')`
 
 ### Error Handling
 - `ProxmoxAuthError`: Authentication issues (check token/config)
