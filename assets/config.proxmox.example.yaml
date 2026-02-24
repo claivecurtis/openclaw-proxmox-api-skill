@@ -1,5 +1,5 @@
 proxmox:
-  host: 10.0.0.12  # Proxmox IP
+  host: 'proxmox.local'  # Proxmox IP
   port: 8006
   user: root@pam  # Proxmox user (for token association)
   token: your-api-token-here  # API token from Proxmox UI
