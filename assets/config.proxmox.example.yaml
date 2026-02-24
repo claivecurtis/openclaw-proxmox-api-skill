@@ -1,6 +1,8 @@
 proxmox:
-  host: your-cluster.example.com  # Proxmox IP
+  host: 192.168.1.100  # Proxmox IP
   port: 8006
+  user: 'your-user@realm'  # Generic Proxmox user (e.g., 'your-user@realm')
+  token: your-api-token-here  # API token from Proxmox UI
   timeout: 300  # seconds for task polling
   verify_ssl: false  # Self-signed
   auto_poll: true  # Default auto-polling for async tasks

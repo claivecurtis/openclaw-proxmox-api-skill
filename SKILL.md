@@ -19,10 +19,9 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
    ```bash
    [ ! -f skill/secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml
-   [ ! -f skill/secrets/pve-token.txt ] && touch skill/secrets/pve-token.txt
    ```
 
-   Edit `secrets/config.proxmox.yaml` and `secrets/pve-token.txt` as needed.
+   Edit `secrets/config.proxmox.yaml` with your host, user, and token.
 3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
 ### Workflows
