@@ -35,8 +35,23 @@ def load_settings(interactive=False):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Snapshot name validation regex: starts with letter, followed by letters, numbers, hyphens, underscores
-NAME_REGEX = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]*$')
+# Validation regexes
+NAME_REGEX = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]*$')  # snapshot names
+VMID_REGEX = re.compile(r'^\d+$')  # VMID: digits only
+NODE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # node names: alphanumeric, hyphens, underscores
+
+def validate_vmid(vmid):
+    """Validate VMID: must be digits, >0"""
+    if not VMID_REGEX.match(str(vmid)):
+        raise ValueError(f"Invalid VMID '{vmid}': must be a positive integer")
+    vmid_int = int(vmid)
+    if vmid_int <= 0:
+        raise ValueError(f"Invalid VMID '{vmid}': must be > 0")
+
+def validate_node(node):
+    """Validate node name"""
+    if not NODE_REGEX.match(node):
+        raise ValueError(f"Invalid node name '{node}': must contain only letters, numbers, hyphens, underscores")
 
 # Config validation
 class ProxmoxConfig(BaseModel):
@@ -391,6 +406,13 @@ class ProxmoxClient:
         :param comment: Optional comment
         :return: None
         """
+        # Idempotency check: ensure pool does not already exist
+        try:
+            self._get(f'/pools/{poolid}')
+            raise ProxmoxAPIError(f"Resource pool '{poolid}' already exists")
+        except ProxmoxAPIError as e:
+            if e.response.status_code != 404:
+                raise
         path = f'/pools'
         data = {'poolid': poolid}
         if comment:
@@ -1121,6 +1143,15 @@ class ProxmoxClient:
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the creation task
         """
+        validate_node(node)
+        validate_vmid(vmid)
+        # Idempotency check: ensure VM does not already exist
+        try:
+            self.get_vm_status(node, vmid, is_lxc)
+            raise ProxmoxAPIError(f"VM {vmid} already exists on node {node}")
+        except ProxmoxAPIError as e:
+            if "not found" not in str(e).lower():
+                raise  # re-raise if not "not found"
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}'
         data = {'vmid': vmid, **config}
@@ -1234,6 +1265,8 @@ class ProxmoxClient:
         :param interactive: If True, prompt for confirmation of generated name
         :return: UPID of the snapshot task
         """
+        validate_node(node)
+        validate_vmid(vmid)
         settings = load_settings(interactive=interactive)
         if snapname is None:
             if change_number is not None:
@@ -1251,6 +1284,11 @@ class ProxmoxClient:
         # Pre-validate snapshot name
         if not NAME_REGEX.match(snapname):
             raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
+        # Idempotency check: ensure snapshot does not already exist
+        existing_snaps = self.vm_snapshot_list(node, vmid, is_lxc)
+        existing_names = [s['name'] for s in existing_snaps]
+        if snapname in existing_names:
+            raise ProxmoxAPIError(f"Snapshot '{snapname}' already exists for VM {vmid}")
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/snapshot'
         data = {'snapname': snapname}
