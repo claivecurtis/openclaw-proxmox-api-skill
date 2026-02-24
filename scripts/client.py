@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 NAME_REGEX = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]*$')  # snapshot names
 VMID_REGEX = re.compile(r'^\d+$')  # VMID: digits only
 NODE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # node names: alphanumeric, hyphens, underscores
+STORAGE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # storage names: alphanumeric, hyphens, underscores
 
 def validate_vmid(vmid):
     """Validate VMID: must be digits, >0"""
@@ -66,6 +67,11 @@ def validate_node(node):
     """Validate node name"""
     if not NODE_REGEX.match(node):
         raise ValueError(f"Invalid node name '{node}': must contain only letters, numbers, hyphens, underscores")
+
+def validate_storage(storage):
+    """Validate storage name"""
+    if not STORAGE_REGEX.match(storage):
+        raise ValueError(f"Invalid storage name '{storage}': must contain only letters, numbers, hyphens, underscores")
 
 # Config validation
 class ProxmoxConfig(BaseModel):
@@ -286,6 +292,14 @@ class ProxmoxClient:
         :param config: Storage configuration dictionary
         :return: None
         """
+        validate_storage(storage_id)
+        # Idempotency check: ensure storage does not already exist
+        try:
+            self._get(f'/storage/{storage_id}')
+            raise ProxmoxAPIError(f"Storage '{storage_id}' already exists")
+        except ProxmoxAPIError as e:
+            if 'HTTP 404' not in str(e):
+                raise
         path = '/storage'
         data = {'id': storage_id, **config}
         try:
