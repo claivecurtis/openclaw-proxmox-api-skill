@@ -628,7 +628,9 @@ class ProxmoxClient:
         :return: Log entries
         """
         path = '/cluster/log'
-        params = {'limit': limit}
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
         try:
             logs = self._get(path, params)
             logger.info(f"Retrieved {len(logs['data'])} cluster log entries")
