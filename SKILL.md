@@ -22,8 +22,8 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    [ ! -f skill/secrets/pve-token.txt ] && touch skill/secrets/pve-token.txt
    ```
 
-   Edit config/token as needed.
-3. settings.json is automatically created and managed (gitignored) for snapshot naming conventions.
+   Edit `secrets/config.proxmox.yaml` and `secrets/pve-token.txt` as needed.
+3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
 ### Workflows
 
@@ -52,7 +52,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 #### Snapshot Creation
 - **Script:** `scripts/client.py` `vm_snapshot_create(node, vmid, snapname=None, change_number=None)`
-- **Description:** Creates a snapshot with automatic naming if not specified. Uses "aiagent-snap-NNNN" convention or custom "aiagent-snap-{change_number}".
+- **Description:** Creates a snapshot with automatic naming if not specified. Uses configurable naming convention from `config.proxmox.yaml` or custom "aiagent-snap-{change_number}".
 - **Examples:**
   - Auto-generate name: `vm_snapshot_create('<node>', <vmid>)`
   - Custom change number: `vm_snapshot_create('<node>', <vmid>, change_number=1234)`

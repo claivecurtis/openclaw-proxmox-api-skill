@@ -4,3 +4,8 @@ proxmox:
   timeout: 300  # seconds for task polling
   verify_ssl: false  # Self-signed
   auto_poll: true  # Default auto-polling for async tasks
+
+snapshots:
+  naming_convention: "aiagent-snap-{number:04d}"  # Template for auto-generated names
+  next_number: 1  # Next number for auto-generated names
+  auto_poll: true  # Default auto-polling for async tasks
