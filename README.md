@@ -22,7 +22,7 @@ Load via skill system: read `SKILL.md` and use scripts in `scripts/`.
 
 See [SKILL.md](SKILL.md) for triggers and workflows.
 
-Outputs of this API can be lengthy/detailed (esp. full VM info)—specify 'brief' for Discord/mobile. Web/TUI handles full; Discord agents better w/ coding model (spawn code-agent via AGENTS.md policy) or summaries. AGENTS.md 'proxmox' alias triggers skill. For agent/skill tables, consider team-consensus skill.
+Outputs of this API can be lengthy/detailed (esp. full VM info)—specify 'brief' for Discord/mobile. Web/TUI handles full; Discord agents better w/ coding model (spawn code-agent via AGENTS.md policy) or summaries. AGENTS.md 'proxmox' alias triggers skill. For agent/skill tables, consider [team-consensus skill](https://github.com/claivecurtis/openclaw-team-consensus-skill).
 
 ### Examples
 Run example scripts in `examples/`:
