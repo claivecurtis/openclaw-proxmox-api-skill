@@ -14,7 +14,7 @@ Use this skill when the user mentions:
 Load the skill by reading this file and the scripts/client.py. The main interface is through Python scripts in the `scripts/` directory.
 
 ### Prerequisites
-1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, etc.).
+1. Create API token in Proxmox for a user with appropriate permissions (VM.Audit, VM.PowerMgmt, VM.Snapshot, etc.).
 2. Run setup exec (idempotent):
 
    ```bash
@@ -23,6 +23,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    ```
 
    Edit config/token as needed.
+3. settings.json is automatically created and managed (gitignored) for snapshot naming conventions.
 
 ### Workflows
 
@@ -48,6 +49,14 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - Migration (via `vm_migrate`)
 - Pool management (via `list_pools`)
 - Cluster monitoring
+
+#### Snapshot Creation
+- **Script:** `scripts/client.py` `vm_snapshot_create(node, vmid, snapname=None, change_number=None)`
+- **Description:** Creates a snapshot with automatic naming if not specified. Uses "aiagent-snap-NNNN" convention or custom "aiagent-snap-{change_number}".
+- **Examples:**
+  - Auto-generate name: `vm_snapshot_create('node1', 126)`
+  - Custom change number: `vm_snapshot_create('node1', 126, change_number=1234)`
+  - Manual name: `vm_snapshot_create('node1', 126, snapname='my-snapshot')`
 
 ### Error Handling
 - `ProxmoxAuthError`: Authentication issues (check token/config)

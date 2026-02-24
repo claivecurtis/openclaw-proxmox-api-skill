@@ -13,6 +13,14 @@ except ImportError:
     BaseModel = object
     ValidationError = Exception
 
+# Load settings
+def load_settings():
+    settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+    if os.path.exists(settings_path):
+        with open(settings_path, 'r') as f:
+            return json.load(f)
+    return {"next_snap_number": 1, "naming_convention": "aiagent-snap-{number:04d}"}
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1203,17 +1211,33 @@ class ProxmoxClient:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, node, vmid, snapname, description=None, is_lxc=False):
+    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
         """
         Create a VM snapshot.
 
         :param node: Node name
         :param vmid: VM ID
-        :param snapname: Snapshot name (validated: starts with letter, only letters/numbers/hyphens/underscores)
+        :param snapname: Snapshot name (if provided, validated: starts with letter, only letters/numbers/hyphens/underscores)
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
+        :param change_number: Optional change number for custom naming
+        :param interactive: If True, prompt for confirmation of generated name
         :return: UPID of the snapshot task
         """
+        settings = load_settings()
+        if snapname is None:
+            if change_number is not None:
+                snapname = f"aiagent-snap-{change_number}"
+            else:
+                number = settings['next_snap_number']
+                snapname = settings['naming_convention'].format(number=number)
+                # Increment next number
+                settings['next_snap_number'] = number + 1
+                settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                if interactive:
+                    logger.info(f"Generated snapshot name: {snapname}. Proceeding with creation.")
         # Pre-validate snapshot name
         if not NAME_REGEX.match(snapname):
             raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
@@ -2364,8 +2388,8 @@ class VM:
     def clone(self, node, vmid, newid, config=None, is_lxc=False):
         return self.client.vm_clone(node, vmid, newid, config, is_lxc)
 
-    def snapshot_create(self, node, vmid, snapname, description=None, is_lxc=False):
-        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
+        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number, interactive)
 
     def snapshot_list(self, node, vmid, is_lxc=False):
         return self.client.vm_snapshot_list(node, vmid, is_lxc)
@@ -2513,8 +2537,8 @@ class Container(VM):
     def clone(self, node, vmid, newid, config=None):
         return super().clone(node, vmid, newid, config, is_lxc=True)
 
-    def snapshot_create(self, node, vmid, snapname, description=None):
-        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None, interactive=False):
+        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number, interactive=interactive)
 
     def snapshot_list(self, node, vmid):
         return super().snapshot_list(node, vmid, is_lxc=True)
