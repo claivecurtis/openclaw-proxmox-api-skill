@@ -1930,18 +1930,22 @@ class ProxmoxClient:
             logger.error(f"Failed to get RRD data for storage '{storage}': {e}")
             raise
 
-    def storage_scan(self, storage):
+    def storage_scan(self, storage, auto_poll=False):
         """
         Scan storage for content.
 
         :param storage: Storage ID
-        :return: UPID of scan task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to False.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/storage/{storage}/scan'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Scan initiated for storage '{storage}', UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_cluster_task(upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to scan storage '{storage}': {e}")
