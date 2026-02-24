@@ -55,11 +55,42 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - Spawn `subagents` for long-running tasks (backups, migrations).
 - Send notifications via `message` tool for monitoring alerts.
 
-**Example (auth test):**
-```
-exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Auth OK\")'"
-```
-Expected: `Auth OK` (no PII/hosts).
+**Examples:**
+
+- **Auth Test:**
+  ```
+  exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" command="python3 -c 'from scripts.client import load_client; c=load_client(); print(\"Auth OK\")'"
+  ```
+  - Expected: `Auth OK` (no PII/hosts).
+
+- **VM List Example (Discord Format):**
+  - **Summary:** Retrieved 1 VM on node pve01.
+  - **Details:** VM 100 (test-vm) is running, type qemu.
+
+  Full JSON: [{"vmid":100,"name":"test-vm","node":"pve01","status":"running","type":"qemu"}]
+
+- **Cluster Health Example (Discord Format):**
+  - **Summary:** Cluster is healthy with 2 nodes online.
+  - **Details:** HA managed resources: 0. Nodes pve01 and pve02 are online.
+
+  Full JSON: {"cluster":{"name":"test-cluster","version":"8.2-4","quorate":1,"nodes":[{"name":"pve01","online":1,"ip":"192.168.1.101"},{"name":"pve02","online":1,"ip":"192.168.1.102"}]},"ha":{"managed":0}}
+
+### Output Formatting Policy
+Apply this globally to all commands and outputs (e.g., Proxmox, exec results, etc.). Preserve full context with no data loss in JSON representations.
+
+- **Discord (channel == discord):** Use human-readable bullets or summaries for key insights, followed by full compact JSON (minified, no data loss) for complete details.
+- **Web/TUI/Main Sessions:** Use raw dense formats like JSON objects, tables, or compact markdown for efficiency.
+- **General Rules (All Platforms):**
+  - **No markdown tables in Discord/WhatsApp:** Use bullet lists instead.
+  - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`.
+  - **WhatsApp:** No headers — use **bold** or CAPS for emphasis.
+
+**Example (Discord Output for Proxmox VM Status):**
+
+- **Summary:** VM 100 is running with 2GB RAM and 1 CPU core.
+- **Details:** CPU usage at 15%, uptime 2 days.
+
+Full JSON: {"vmid":100,"name":"test-vm","status":"running","uptime":172800,"cpus":1,"mem":2147483648,"maxmem":2147483648,"cpu":0.15}
 
 ### Output Formatting Policy
 Apply this globally to all commands and outputs (e.g., Proxmox, exec results, etc.). Preserve full context with no data loss in JSON representations.
