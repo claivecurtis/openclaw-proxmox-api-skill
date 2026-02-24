@@ -104,6 +104,26 @@ class TestProxmoxClient:
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/status/start', json={}, verify=True, timeout=30)
 
     @patch('client.requests.Session')
+    def test_vm_action_auto_poll(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:some:task:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_response_poll = Mock()
+        mock_response_poll.json.return_value = {'data': {'status': 'stopped', 'exitstatus': 'OK'}}
+        mock_response_poll.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response_post
+        mock_session.get.return_value = mock_response_poll
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        result = client.vm_action('node1', 101, 'start', auto_poll=True)
+
+        assert result == {'upid': 'UPID:node1:00000001:00000002:00000003:some:task:', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
+        mock_session.post.assert_called_once()
+        mock_session.get.assert_called_once()
+
+    @patch('client.requests.Session')
     def test_poll_task_success(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
@@ -121,7 +141,7 @@ class TestProxmoxClient:
             with patch('time.time', side_effect=[0, 1, 2]):
                 result = client.poll_task('node1', 'upid123', timeout=10, poll_interval=1)
 
-        assert result is True
+        assert result == {'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
         assert mock_sleep.call_count == 0
 
     @patch('client.requests.Session')
@@ -135,8 +155,8 @@ class TestProxmoxClient:
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
 
-        with pytest.raises(ProxmoxAPIError, match="Task upid123 failed"):
-            client.poll_task('node1', 'upid123')
+        result = client.poll_task('node1', 'upid123')
+        assert result == {'success': False, 'exitstatus': 'ERROR', 'status': 'stopped'}
 
     @patch('client.requests.Session')
     def test_poll_task_timeout(self, mock_session_class):
