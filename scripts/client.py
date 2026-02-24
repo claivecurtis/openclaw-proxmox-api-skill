@@ -95,8 +95,9 @@ def validate_storage(storage):
 # Config validation
 class ProxmoxConfig(BaseModel):
     host: str
+    user: Optional[str] = None
+    token: Optional[str] = None
     verify_ssl: bool = True
-    token_path: Optional[str] = None
     timeout: int = 30
     auto_poll: bool = True
 
@@ -2953,8 +2954,11 @@ def load_client():
         config.timeout = raw_config['proxmox'].get('timeout', 30)
         config.auto_poll = raw_config['proxmox'].get('auto_poll', True)
 
-    # Load token
-    with open(token_path, 'r') as f:
-        token = f.read().strip()
+    # Load token from yaml, fallback to txt for backward compatibility
+    token = raw_config['proxmox'].get('token')
+    if token is None:
+        # Fallback to txt file (deprecated)
+        with open(token_path, 'r') as f:
+            token = f.read().strip()
 
     return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
