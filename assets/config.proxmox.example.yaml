@@ -1,5 +1,5 @@
 proxmox:
-  host: 10.0.0.12  # Proxmox IP
+  host: your-cluster.example.com  # Proxmox IP
   port: 8006
   timeout: 300  # seconds for task polling
   verify_ssl: false  # Self-signed
