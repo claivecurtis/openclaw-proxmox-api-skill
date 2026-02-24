@@ -188,10 +188,11 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
     - Certificate management. ✅ (node_certificates)
     - Remote migration for VMs/containers. ✅ (vm_migrate with target_node)
 
-### Phase 5: Ceph Integration Considerations
+### Phase 5: Other Integration Considerations
 
 - Ceph API/integration (cluster ceph support/endpoints).
 - Notes → docs.
+- Consider handling for multiple Proxmox clusters (e.g., configuration profiles, dynamic cluster selection via env vars or CLI flags).
 
 ## Implementation Notes
 
