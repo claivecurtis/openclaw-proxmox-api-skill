@@ -488,18 +488,6 @@ class ProxmoxClient:
         """
         return self._get('/cluster/tasks')
 
-    def cluster_logs(self, limit=None):
-        """
-        Get cluster logs.
-
-        :param limit: Maximum number of log entries to return
-        :return: Cluster log entries
-        """
-        params = {}
-        if limit:
-            params['limit'] = limit
-        return self._get('/cluster/log', params)
-
     def cluster_backup(self):
         """
         Get cluster backup status.
@@ -977,23 +965,6 @@ class ProxmoxClient:
             logger.error(f"Failed to get syslog for node {node}: {e}")
             raise
 
-    def node_rrd(self, node, **kwargs):
-        """
-        Get node RRD data.
-
-        :param node: Node name
-        :param kwargs: Additional parameters (e.g., timeframe='hour')
-        :return: RRD data
-        """
-        path = f'/nodes/{node}/rrd'
-        try:
-            rrd = self._get(path, kwargs)
-            logger.info(f"Retrieved RRD data for node {node}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for node {node}: {e}")
-            raise
-
     def node_vncshell(self, node):
         """
         Get VNC shell for node.
@@ -1094,24 +1065,6 @@ class ProxmoxClient:
             return result['data']
         except ProxmoxAPIError as e:
             logger.error(f"Failed Ceph operation on node {node}: {e}")
-            raise
-
-    def node_rrd(self, node, timeframe='hour'):
-        """
-        Get RRD data for node.
-
-        :param node: Node name
-        :param timeframe: Timeframe
-        :return: RRD data
-        """
-        path = f'/nodes/{node}/rrd'
-        params = {'timeframe': timeframe}
-        try:
-            rrd = self._get(path, params)
-            logger.info(f"Retrieved RRD data for node {node}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for node {node}: {e}")
             raise
 
     def get_vm_status(self, node, vmid, is_lxc=False):
@@ -1588,20 +1541,6 @@ class ProxmoxClient:
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
 
     # Phase 3: Access Control
-    def user_list(self):
-        """
-        List users.
-
-        :return: List of users
-        """
-        try:
-            users = self._get('/access/users')
-            logger.info(f"Retrieved {len(users['data'])} users")
-            return users['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to list users: {e}")
-            raise
-
     def user_create(self, userid, config):
         """
         Create a user.
