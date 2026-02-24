@@ -645,8 +645,10 @@ class TestProxmoxClient:
         assert upid == 'UPID:node1:00000001:00000002:00000003:clone:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/clone', json={'newid': 102, 'name': 'clone-vm'}, verify=True, timeout=30)
 
+    @patch('client.load_snapshot_settings')
     @patch('client.requests.Session')
-    def test_vm_snapshot_create(self, mock_session_class):
+    def test_vm_snapshot_create(self, mock_session_class, mock_load_snapshot_settings):
+        mock_load_snapshot_settings.return_value = {'next_number': 1}
         mock_session = Mock()
         mock_session_class.return_value = mock_session
         mock_response = Mock()

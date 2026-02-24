@@ -7,6 +7,10 @@ import re
 import threading
 from typing import Dict, List, Optional, Any
 try:
+    import yaml
+except ImportError:
+    yaml = None
+try:
     from pydantic import BaseModel, ValidationError
     PYDANTIC_AVAILABLE = True
 except ImportError:
@@ -49,6 +53,16 @@ def save_snapshot_settings(settings):
         config['snapshots'] = settings
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
+
+# Load snapshot settings from secrets/config.proxmox.yaml
+def load_snapshot_settings():
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    with settings_lock:
+        if yaml is None:
+            raise ImportError("PyYAML is required for loading snapshot settings")
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
