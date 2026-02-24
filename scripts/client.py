@@ -17,33 +17,38 @@ except ImportError:
 # Global settings lock for thread safety
 settings_lock = threading.Lock()
 
-# Default settings
-DEFAULT_SETTINGS = {
+# Default snapshot settings
+DEFAULT_SNAPSHOT_SETTINGS = {
     "naming_convention": "aiagent-snap-{number:04d}",
-    "next_snap_number": 1
+    "next_number": 1
 }
 
-# Load settings with thread lock and global defaults
-def load_settings(interactive=False):
-    settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+# Load snapshot settings from config.proxmox.yaml
+def load_snapshot_settings():
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
     with settings_lock:
-        if os.path.exists(settings_path):
-            with open(settings_path, 'r') as f:
-                return json.load(f)
-        else:
-            if interactive:
-                default = DEFAULT_SETTINGS["naming_convention"]
-                user_input = input(f"Naming convention? (default {default}) [input] ").strip()
-                convention = user_input if user_input else default
-                settings = {"naming_convention": convention, "next_snap_number": DEFAULT_SETTINGS["next_snap_number"]}
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                return settings
-            else:
-                settings = DEFAULT_SETTINGS.copy()
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                return settings
+        import yaml
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        snapshots = config.get('snapshots', {})
+        # Apply defaults
+        for k, v in DEFAULT_SNAPSHOT_SETTINGS.items():
+            if k not in snapshots:
+                snapshots[k] = v
+        return snapshots
+
+# Save snapshot settings back to config.proxmox.yaml
+def save_snapshot_settings(settings):
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    with settings_lock:
+        import yaml
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        config['snapshots'] = settings
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -411,16 +416,14 @@ class ProxmoxClient:
             logger.error(f"Failed to get RRD data for storage {storage}: {e}")
             raise
 
-    def storage_scan(self, storage, auto_poll=None):
+    def storage_scan(self, storage, auto_poll=True):
         """
         Scan storage for content.
 
         :param storage: Storage ID
-        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to True.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
-        if auto_poll is None:
-            auto_poll = self.auto_poll
         path = f'/storage/{storage}/scan'
         try:
             result = self._post(path, {})
@@ -1318,7 +1321,7 @@ class ProxmoxClient:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False, auto_poll=None):
+    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, auto_poll=None):
         """
         Create a VM snapshot.
 
@@ -1328,7 +1331,6 @@ class ProxmoxClient:
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
         :param change_number: Optional change number for custom naming
-        :param interactive: If True, prompt for confirmation of generated name
         :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :return: UPID if not auto_poll, status dict if auto_poll
         """
@@ -1336,20 +1338,16 @@ class ProxmoxClient:
             auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
-        settings = load_settings(interactive=interactive)
+        settings = load_snapshot_settings()
         if snapname is None:
             if change_number is not None:
                 snapname = f"aiagent-snap-{change_number}"
             else:
-                number = settings['next_snap_number']
+                number = settings['next_number']
                 snapname = settings['naming_convention'].format(number=number)
                 # Increment next number
-                settings['next_snap_number'] = number + 1
-                settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                if interactive:
-                    logger.info(f"Generated snapshot name: {snapname}. Proceeding with creation.")
+                settings['next_number'] = number + 1
+                save_snapshot_settings(settings)
         # Pre-validate snapshot name
         if not NAME_REGEX.match(snapname):
             raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
@@ -2557,8 +2555,8 @@ class VM:
     def clone(self, node, vmid, newid, config=None, is_lxc=False):
         return self.client.vm_clone(node, vmid, newid, config, is_lxc)
 
-    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
-        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number, interactive)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None):
+        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number)
 
     def snapshot_list(self, node, vmid, is_lxc=False):
         return self.client.vm_snapshot_list(node, vmid, is_lxc)
@@ -2706,8 +2704,8 @@ class Container(VM):
     def clone(self, node, vmid, newid, config=None):
         return super().clone(node, vmid, newid, config, is_lxc=True)
 
-    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None, interactive=False):
-        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number, interactive=interactive)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None):
+        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number)
 
     def snapshot_list(self, node, vmid):
         return super().snapshot_list(node, vmid, is_lxc=True)

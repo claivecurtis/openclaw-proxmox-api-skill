@@ -660,6 +660,26 @@ class TestProxmoxClient:
         assert upid == 'UPID:node1:00000001:00000002:00000003:snapshot:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': 'snap1', 'description': 'Test snapshot'}, verify=True, timeout=30)
 
+    @patch('client.save_snapshot_settings')
+    @patch('client.load_snapshot_settings')
+    @patch('client.requests.Session')
+    def test_vm_snapshot_create_auto_name(self, mock_session_class, mock_load_settings, mock_save_settings):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:snapshot:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+        mock_load_settings.return_value = {'naming_convention': 'aiagent-snap-{number:04d}', 'next_number': 5}
+        mock_save_settings.return_value = None
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_snapshot_create('node1', 101, auto_poll=False)
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:snapshot:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': 'aiagent-snap-0005'}, verify=True, timeout=30)
+        mock_save_settings.assert_called_with({'naming_convention': 'aiagent-snap-{number:04d}', 'next_number': 6})
+
     @patch('client.requests.Session')
     def test_vm_snapshot_list(self, mock_session_class):
         mock_session = Mock()
@@ -900,7 +920,7 @@ class TestProxmoxClient:
         mock_session.get.side_effect = [mock_response_version, mock_response_poll]
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        result = client.storage_scan('local')  # Default auto_poll=True
+        result = client.storage_scan('local', auto_poll=True)
 
         assert result == {'upid': 'UPID:cluster:00000001:00000002:00000003:scan:', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
         mock_session.post.assert_called_once()
