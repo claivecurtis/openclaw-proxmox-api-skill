@@ -3,3 +3,4 @@ proxmox:
   port: 8006
   timeout: 300  # seconds for task polling
   verify_ssl: false  # Self-signed
+  auto_poll: true  # Default auto-polling for async tasks
