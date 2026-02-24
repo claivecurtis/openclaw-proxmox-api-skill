@@ -192,7 +192,8 @@ class ProxmoxClient:
                     for member in pool.get('members', []):
                         pool_members[f"{member['type']}/{member['vmid']}"] = pool['poolid']
                 for vm in vms:
-                    vm['pool'] = pool_members.get(f"{vm['type']}/{vm['vmid']}", None)
+                    vmid = vm.get('vmid', vm.get('id'))
+                    vm['pool'] = pool_members.get(f"{vm['type']}/{vmid}", None)
             except ProxmoxAPIError:
                 logger.debug("Failed to get pool information")
             logger.info(f"Retrieved {len(vms)} VMs with pool info")
@@ -404,6 +405,8 @@ class ProxmoxClient:
             pools_summary = self._get('/pools')['data']
             pools = []
             for pool in pools_summary:
+                if not isinstance(pool, dict) or 'poolid' not in pool:
+                    continue
                 pool_details = self._get(f'/pools/{pool["poolid"]}')['data']
                 pools.append(pool_details)
             logger.info(f"Retrieved {len(pools)} resource pools with members")
@@ -425,7 +428,7 @@ class ProxmoxClient:
             self._get(f'/pools/{poolid}')
             raise ProxmoxAPIError(f"Resource pool '{poolid}' already exists")
         except ProxmoxAPIError as e:
-            if e.response.status_code != 404:
+            if 'HTTP 404' not in str(e):
                 raise
         path = f'/pools'
         data = {'poolid': poolid}
@@ -1118,8 +1121,8 @@ class ProxmoxClient:
         try:
             self.get_vm_status(node, vmid, is_lxc)
             raise ProxmoxAPIError(f"VM {vmid} already exists on node {node}")
-        except ProxmoxAPIError as e:
-            if "not found" not in str(e).lower():
+        except Exception as e:
+            if 'HTTP 404' not in str(e):
                 raise  # re-raise if not "not found"
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}'
@@ -1142,6 +1145,17 @@ class ProxmoxClient:
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the deletion task
         """
+        validate_node(node)
+        validate_vmid(vmid)
+        # Idempotency check: ensure VM exists
+        try:
+            self.get_vm_status(node, vmid, is_lxc)
+        except Exception as e:
+            if 'HTTP 404' in str(e):
+                logger.info(f"VM {vmid} does not exist on node {node}, skipping delete")
+                return None
+            else:
+                raise
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}'
         try:
@@ -1254,7 +1268,10 @@ class ProxmoxClient:
         if not NAME_REGEX.match(snapname):
             raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
         # Idempotency check: ensure snapshot does not already exist
-        existing_snaps = self.vm_snapshot_list(node, vmid, is_lxc)
+        try:
+            existing_snaps = self.vm_snapshot_list(node, vmid, is_lxc)
+        except Exception:
+            existing_snaps = []
         existing_names = [s['name'] for s in existing_snaps]
         if snapname in existing_names:
             raise ProxmoxAPIError(f"Snapshot '{snapname}' already exists for VM {vmid}")
@@ -1816,14 +1833,15 @@ class ProxmoxClient:
             logger.error(f"Failed to get HA status: {e}")
             raise
 
-    def cluster_resources(self):
+    def cluster_resources(self, **kwargs):
         """
         List cluster resources.
 
+        :param kwargs: Additional parameters (e.g., type='vm')
         :return: List of resources
         """
         try:
-            resources = self._get('/cluster/resources')
+            resources = self._get('/cluster/resources', params=kwargs if kwargs else None)
             logger.info(f"Retrieved {len(resources['data'])} cluster resources")
             return resources['data']
         except ProxmoxAPIError as e:

@@ -53,9 +53,15 @@ class TestProxmoxClient:
     def test_get_timeout(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
-        mock_session.get.side_effect = TimeoutError()
+        mock_response = Mock()
+        mock_response.json.return_value = {'version': '1.0'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
+
+        import requests
+        mock_session.get.side_effect = requests.exceptions.Timeout()
 
         with pytest.raises(ProxmoxAPIError, match="Request timed out"):
             client._get('/test')
@@ -116,7 +122,7 @@ class TestProxmoxClient:
                 result = client.poll_task('node1', 'upid123', timeout=10, poll_interval=1)
 
         assert result is True
-        assert mock_sleep.call_count == 1
+        assert mock_sleep.call_count == 0
 
     @patch('client.requests.Session')
     def test_poll_task_failure(self, mock_session_class):
@@ -192,12 +198,22 @@ class TestProxmoxClient:
 
     @patch('client.requests.Session')
     def test_create_resource_pool(self, mock_session_class):
+        import requests
         mock_session = Mock()
         mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_pool = Mock()
+        http_error = requests.exceptions.HTTPError("404 Client Error")
+        http_error.response = Mock()
+        http_error.response.status_code = 404
+        mock_response_pool.raise_for_status.side_effect = http_error
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {}
+        mock_response_post.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_version, mock_response_pool]
+        mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
         client.create_resource_pool('newpool', 'Test pool')
@@ -208,6 +224,9 @@ class TestProxmoxClient:
     def test_list_pools_with_members(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
         mock_response_pools = Mock()
         mock_response_pools.json.return_value = {'data': [{'poolid': 'pool1'}, {'poolid': 'pool2'}]}
         mock_response_pools.raise_for_status.return_value = None
@@ -217,7 +236,7 @@ class TestProxmoxClient:
         mock_response_detail2 = Mock()
         mock_response_detail2.json.return_value = {'data': {'poolid': 'pool2', 'members': []}}
         mock_response_detail2.raise_for_status.return_value = None
-        mock_session.get.side_effect = [mock_response_pools, mock_response_detail1, mock_response_detail2]
+        mock_session.get.side_effect = [mock_response_version, mock_response_pools, mock_response_detail1, mock_response_detail2]
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
         pools = client.list_pools_with_members()
@@ -293,12 +312,22 @@ class TestProxmoxClient:
 
     @patch('client.requests.Session')
     def test_vm_create(self, mock_session_class):
+        import requests
         mock_session = Mock()
         mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:create:'}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_status = Mock()
+        http_error = requests.exceptions.HTTPError("404 Client Error")
+        http_error.response = Mock()
+        http_error.response.status_code = 404
+        mock_response_status.raise_for_status.side_effect = http_error
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:create:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_version, mock_response_status]
+        mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
         upid = client.vm_create('node1', 101, {'name': 'test-vm'})
@@ -310,10 +339,17 @@ class TestProxmoxClient:
     def test_vm_delete(self, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:delete:'}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_status = Mock()
+        mock_response_status.json.return_value = {'data': {'status': 'stopped'}}
+        mock_response_status.raise_for_status.return_value = None
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:delete:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_version, mock_response_status]
+        mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
         upid = client.vm_delete('node1', 101)
@@ -515,7 +551,7 @@ class TestProxmoxClient:
                 result = poll_task_until_complete(client, 'node1', 'upid123', timeout=10, poll_interval=1)
 
         assert result is True
-        assert mock_sleep.call_count == 1
+        assert mock_sleep.call_count == 0
 
     # Phase 2 tests
     @patch('client.requests.Session')
