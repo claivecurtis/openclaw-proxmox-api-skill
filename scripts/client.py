@@ -7,6 +7,10 @@ import re
 import threading
 from typing import Dict, List, Optional, Any
 try:
+    import yaml
+except ImportError:
+    yaml = None
+try:
     from pydantic import BaseModel, ValidationError
     PYDANTIC_AVAILABLE = True
 except ImportError:
@@ -17,33 +21,48 @@ except ImportError:
 # Global settings lock for thread safety
 settings_lock = threading.Lock()
 
-# Default settings
-DEFAULT_SETTINGS = {
+# Default snapshot settings
+DEFAULT_SNAPSHOT_SETTINGS = {
     "naming_convention": "aiagent-snap-{number:04d}",
-    "next_snap_number": 1
+    "next_number": 1
 }
 
-# Load settings with thread lock and global defaults
-def load_settings(interactive=False):
-    settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+# Load snapshot settings from config.proxmox.yaml
+def load_snapshot_settings():
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
     with settings_lock:
-        if os.path.exists(settings_path):
-            with open(settings_path, 'r') as f:
-                return json.load(f)
-        else:
-            if interactive:
-                default = DEFAULT_SETTINGS["naming_convention"]
-                user_input = input(f"Naming convention? (default {default}) [input] ").strip()
-                convention = user_input if user_input else default
-                settings = {"naming_convention": convention, "next_snap_number": DEFAULT_SETTINGS["next_snap_number"]}
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                return settings
-            else:
-                settings = DEFAULT_SETTINGS.copy()
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                return settings
+        import yaml
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        snapshots = config.get('snapshots', {})
+        # Apply defaults
+        for k, v in DEFAULT_SNAPSHOT_SETTINGS.items():
+            if k not in snapshots:
+                snapshots[k] = v
+        return snapshots
+
+# Save snapshot settings back to config.proxmox.yaml
+def save_snapshot_settings(settings):
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    with settings_lock:
+        import yaml
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        config['snapshots'] = settings
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False)
+
+# Load snapshot settings from secrets/config.proxmox.yaml
+def load_snapshot_settings():
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    with settings_lock:
+        if yaml is None:
+            raise ImportError("PyYAML is required for loading snapshot settings")
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -79,6 +98,7 @@ class ProxmoxConfig(BaseModel):
     verify_ssl: bool = True
     token_path: Optional[str] = None
     timeout: int = 30
+    auto_poll: bool = True
 
 class ProxmoxAuthError(Exception):
     pass
@@ -90,17 +110,21 @@ class TaskTimeoutError(Exception):
     pass
 
 class ProxmoxClient:
-    def __init__(self, host, token, verify_ssl=True):
+    def __init__(self, host, token, verify_ssl=True, timeout=30, auto_poll=True):
         """
         Initialize the Proxmox API client.
 
         :param host: Proxmox host (e.g., 'pve.example.com')
         :param token: API token in 'user@realm!tokenid=secret' format
         :param verify_ssl: Whether to verify SSL certificates
+        :param timeout: Request timeout in seconds
+        :param auto_poll: Default auto-polling for async tasks
         """
         self.host = host
         self.token = token
         self.verify_ssl = verify_ssl
+        self.timeout = timeout
+        self.auto_poll = auto_poll
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'PVEAPIToken={token}',
@@ -123,7 +147,7 @@ class ProxmoxClient:
         """
         url = f"https://{self.host}:8006/api2/json{path}"
         try:
-            resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=30)
+            resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -145,7 +169,28 @@ class ProxmoxClient:
         """
         url = f"https://{self.host}:8006/api2/json{path}"
         try:
-            resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=30)
+            resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=self.timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.Timeout:
+            raise ProxmoxAPIError("Request timed out")
+        except requests.exceptions.SSLError:
+            raise ProxmoxAPIError("SSL verification failed")
+        except requests.exceptions.HTTPError as e:
+            raise ProxmoxAPIError(f"HTTP {e.response.status_code}: {e.response.text}")
+        except Exception as e:
+            raise ProxmoxAPIError(f"Request failed: {e}")
+
+    def _delete(self, path):
+        """
+        Perform a DELETE request to the API.
+
+        :param path: API path
+        :return: JSON response data
+        """
+        url = f"https://{self.host}:8006/api2/json{path}"
+        try:
+            resp = self.session.delete(url, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.Timeout:
@@ -208,7 +253,7 @@ class ProxmoxClient:
             logger.error(f"Failed to list VMs: {e}")
             raise
 
-    def vm_action(self, node, vmid, action, vm_type='qemu', **kwargs):
+    def vm_action(self, node, vmid, action, vm_type='qemu', auto_poll=None, **kwargs):
         """
         Perform an action on a VM or LXC (e.g., start, stop, reboot).
 
@@ -216,15 +261,21 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param action: Action (start, stop, reboot, etc.)
         :param vm_type: 'qemu' or 'lxc'
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
         :param kwargs: Additional parameters (e.g., timeout for shutdown)
-        :return: UPID if asynchronous, None if synchronous
+        :return: UPID if asynchronous and not auto_poll, status dict if auto_poll, None if synchronous
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         path = f'/nodes/{node}/{vm_type}/{vmid}/status/{action}'
         try:
             result = self._post(path, kwargs)
             if 'data' in result and result['data']:
                 upid = result['data']
                 logger.info(f"{vm_type.upper()} {vmid} action '{action}' initiated, UPID: {upid}")
+                if auto_poll:
+                    poll_result = self.poll_task(node, upid)
+                    return {'upid': upid, **poll_result}
                 return upid
             else:
                 logger.info(f"{vm_type.upper()} {vmid} action '{action}' completed synchronously")
@@ -379,18 +430,23 @@ class ProxmoxClient:
             logger.error(f"Failed to get RRD data for storage {storage}: {e}")
             raise
 
-    def storage_scan(self, storage):
+    def storage_scan(self, storage, auto_poll=True):
         """
         Scan storage for content.
 
         :param storage: Storage ID
-        :return: Scan result
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to True.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/storage/{storage}/scan'
         try:
             result = self._post(path, {})
-            logger.info(f"Scanned storage {storage}")
-            return result['data']
+            upid = result['data']
+            logger.info(f"Scanned storage {storage}, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_cluster_task(upid)
+                return {'upid': upid, **poll_result}
+            return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to scan storage {storage}: {e}")
             raise
@@ -1030,13 +1086,14 @@ class ProxmoxClient:
             logger.error(f"Failed to create SPICE shell for node {node}: {e}")
             raise
 
-    def node_migrateall(self, node, target):
+    def node_migrateall(self, node, target, auto_poll=True):
         """
         Migrate all VMs/containers from node.
 
         :param node: Source node name
         :param target: Target node name
-        :return: UPID of the migration task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/migrateall'
         data = {'target': target}
@@ -1044,40 +1101,51 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Migrate all from node {node} to {target} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to migrate all from node {node}: {e}")
             raise
 
-    def node_startall(self, node):
+    def node_startall(self, node, auto_poll=True):
         """
         Start all VMs/containers on node.
 
         :param node: Node name
-        :return: UPID of the start task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/startall'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Start all on node {node} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to start all on node {node}: {e}")
             raise
 
-    def node_stopall(self, node):
+    def node_stopall(self, node, auto_poll=True):
         """
         Stop all VMs/containers on node.
 
         :param node: Node name
-        :return: UPID of the stop task
+        :param auto_poll: If True, poll the task until completion and return status dict
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/nodes/{node}/stopall'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Stop all on node {node} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to stop all on node {node}: {e}")
@@ -1119,7 +1187,7 @@ class ProxmoxClient:
             logger.error(f"Failed to get status for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_create(self, node, vmid, config, is_lxc=False):
+    def vm_create(self, node, vmid, config, is_lxc=False, auto_poll=None):
         """
         Create a new VM.
 
@@ -1127,8 +1195,11 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param config: VM configuration dictionary
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the creation task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
         # Idempotency check: ensure VM does not already exist
@@ -1145,20 +1216,26 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"VM {vmid} creation initiated on node {node}, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to create VM {vmid}: {e}")
             raise
 
-    def vm_delete(self, node, vmid, is_lxc=False):
+    def vm_delete(self, node, vmid, is_lxc=False, auto_poll=None):
         """
         Delete a VM.
 
         :param node: Node name
         :param vmid: VM ID
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the deletion task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll and async, status dict if auto_poll, None if sync or not exists
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
         # Idempotency check: ensure VM exists
@@ -1177,6 +1254,9 @@ class ProxmoxClient:
             if 'data' in result:
                 upid = result['data']
                 logger.info(f"VM {vmid} deletion initiated on node {node}, UPID: {upid}")
+                if auto_poll:
+                    poll_result = self.poll_task(node, upid)
+                    return {'upid': upid, **poll_result}
                 return upid
             else:
                 logger.info(f"VM {vmid} deleted synchronously")
@@ -1224,7 +1304,7 @@ class ProxmoxClient:
             raise
 
     # Advanced VM operations
-    def vm_clone(self, node, vmid, newid, config=None, is_lxc=False):
+    def vm_clone(self, node, vmid, newid, config=None, is_lxc=False, auto_poll=None):
         """
         Clone a VM.
 
@@ -1233,8 +1313,11 @@ class ProxmoxClient:
         :param newid: New VM ID
         :param config: Optional configuration overrides
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the clone task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/clone'
         data = {'newid': newid}
@@ -1244,12 +1327,15 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Clone of {vm_type} {vmid} to {newid} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
+    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, auto_poll=None):
         """
         Create a VM snapshot.
 
@@ -1259,25 +1345,23 @@ class ProxmoxClient:
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
         :param change_number: Optional change number for custom naming
-        :param interactive: If True, prompt for confirmation of generated name
-        :return: UPID of the snapshot task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         validate_node(node)
         validate_vmid(vmid)
-        settings = load_settings(interactive=interactive)
+        settings = load_snapshot_settings()
         if snapname is None:
             if change_number is not None:
                 snapname = f"aiagent-snap-{change_number}"
             else:
-                number = settings['next_snap_number']
+                number = settings['next_number']
                 snapname = settings['naming_convention'].format(number=number)
                 # Increment next number
-                settings['next_snap_number'] = number + 1
-                settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
-                with open(settings_path, 'w') as f:
-                    json.dump(settings, f, indent=2)
-                if interactive:
-                    logger.info(f"Generated snapshot name: {snapname}. Proceeding with creation.")
+                settings['next_number'] = number + 1
+                save_snapshot_settings(settings)
         # Pre-validate snapshot name
         if not NAME_REGEX.match(snapname):
             raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
@@ -1298,6 +1382,9 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Snapshot '{snapname}' for {vm_type} {vmid} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to create snapshot for {vm_type} {vmid}: {e}")
@@ -1343,7 +1430,7 @@ class ProxmoxClient:
             logger.error(f"Failed to rollback {vm_type} {vmid} to snapshot '{snapname}': {e}")
             raise
 
-    def vm_snapshot_delete(self, node, vmid, snapname, is_lxc=False):
+    def vm_snapshot_delete(self, node, vmid, snapname, is_lxc=False, auto_poll=None):
         """
         Delete a VM snapshot.
 
@@ -1351,20 +1438,26 @@ class ProxmoxClient:
         :param vmid: VM ID
         :param snapname: Snapshot name
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the delete task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/snapshot/{snapname}'
         try:
-            result = self._post(path, {})  # DELETE via POST
+            result = self._delete(path)
             upid = result['data']
             logger.info(f"Deletion of snapshot '{snapname}' for {vm_type} {vmid} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to delete snapshot '{snapname}' for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False):
+    def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False, auto_poll=None):
         """
         Migrate VM to another node.
 
@@ -1373,8 +1466,11 @@ class ProxmoxClient:
         :param target_node: Target node name
         :param online: True for online migration, False for offline
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the migration task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/migrate'
         data = {'target': target_node, 'online': int(online)}
@@ -1382,6 +1478,9 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Migration of {vm_type} {vmid} from {node} to {target_node} initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to migrate {vm_type} {vmid}: {e}")
@@ -1408,7 +1507,7 @@ class ProxmoxClient:
             logger.error(f"Failed to resize disk for {vm_type} {vmid}: {e}")
             raise
 
-    def vm_move_volume(self, node, vmid, volume, storage, is_lxc=False):
+    def vm_move_volume(self, node, vmid, volume, storage, is_lxc=False, auto_poll=None):
         """
         Move VM volume to different storage.
 
@@ -1417,8 +1516,11 @@ class ProxmoxClient:
         :param volume: Volume identifier
         :param storage: Target storage ID
         :param is_lxc: True if LXC, False for QEMU
-        :return: UPID of the move task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/{"move_disk" if vm_type == "qemu" else "move_volume"}'
         data = {'disk' if vm_type == 'qemu' else 'volume': volume, 'storage': storage}
@@ -1426,6 +1528,9 @@ class ProxmoxClient:
             result = self._post(path, data)
             upid = result['data']
             logger.info(f"Move of volume '{volume}' for {vm_type} {vmid} to storage '{storage}' initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to move volume for {vm_type} {vmid}: {e}")
@@ -1550,13 +1655,13 @@ class ProxmoxClient:
 
     def poll_task(self, node, upid, timeout=300, poll_interval=5):
         """
-        Poll a task until completion.
+        Poll a node task until completion.
 
         :param node: Node name
         :param upid: Unique Process ID
         :param timeout: Timeout in seconds
         :param poll_interval: Initial polling interval in seconds (with backoff)
-        :return: True if successful, raises exception otherwise
+        :return: Dict with 'success', 'exitstatus', 'status'
         """
         path = f'/nodes/{node}/tasks/{upid}/status'
         start_time = time.time()
@@ -1565,15 +1670,14 @@ class ProxmoxClient:
             try:
                 status = self._get(path)
                 task_status = status['data']['status']
+                exitstatus = status['data'].get('exitstatus', 'OK')
                 if task_status == 'stopped':
-                    exitstatus = status['data'].get('exitstatus', 'OK')
-                    if exitstatus == 'OK':
+                    success = exitstatus == 'OK'
+                    if success:
                         logger.info(f"Task {upid} completed successfully")
-                        return True
                     else:
-                        error_msg = f"Task {upid} failed with exitstatus: {exitstatus}"
-                        logger.error(error_msg)
-                        raise ProxmoxAPIError(error_msg)
+                        logger.error(f"Task {upid} failed with exitstatus: {exitstatus}")
+                    return {'success': success, 'exitstatus': exitstatus, 'status': 'stopped'}
                 elif task_status == 'running':
                     logger.debug(f"Task {upid} still running...")
                 else:
@@ -1588,6 +1692,45 @@ class ProxmoxClient:
             except ProxmoxAPIError:
                 raise
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
+
+    def poll_cluster_task(self, upid, timeout=300, poll_interval=5):
+        """
+        Poll a cluster task until completion.
+
+        :param upid: Unique Process ID
+        :param timeout: Timeout in seconds
+        :param poll_interval: Initial polling interval in seconds (with backoff)
+        :return: Dict with 'success', 'exitstatus', 'status'
+        """
+        path = f'/cluster/tasks/{upid}/status'
+        start_time = time.time()
+        current_interval = poll_interval
+        while time.time() - start_time < timeout:
+            try:
+                status = self._get(path)
+                task_status = status['data']['status']
+                exitstatus = status['data'].get('exitstatus', 'OK')
+                if task_status == 'stopped':
+                    success = exitstatus == 'OK'
+                    if success:
+                        logger.info(f"Cluster task {upid} completed successfully")
+                    else:
+                        logger.error(f"Cluster task {upid} failed with exitstatus: {exitstatus}")
+                    return {'success': success, 'exitstatus': exitstatus, 'status': 'stopped'}
+                elif task_status == 'running':
+                    logger.debug(f"Cluster task {upid} still running...")
+                else:
+                    logger.warning(f"Cluster task {upid} in unknown status: {task_status}")
+                time.sleep(min(current_interval, 30))
+                current_interval *= 1.5
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    raise ProxmoxAPIError(f"Cluster task {upid} not found")
+                else:
+                    raise
+            except ProxmoxAPIError:
+                raise
+        raise TaskTimeoutError(f"Cluster task {upid} timed out after {timeout} seconds")
 
     # Phase 3: Access Control
     def user_create(self, userid, config):
@@ -1801,18 +1944,22 @@ class ProxmoxClient:
             logger.error(f"Failed to get RRD data for storage '{storage}': {e}")
             raise
 
-    def storage_scan(self, storage):
+    def storage_scan(self, storage, auto_poll=False):
         """
         Scan storage for content.
 
         :param storage: Storage ID
-        :return: UPID of scan task
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to False.
+        :return: UPID if not auto_poll, status dict if auto_poll
         """
         path = f'/storage/{storage}/scan'
         try:
             result = self._post(path, {})
             upid = result['data']
             logger.info(f"Scan initiated for storage '{storage}', UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_cluster_task(upid)
+                return {'upid': upid, **poll_result}
             return upid
         except ProxmoxAPIError as e:
             logger.error(f"Failed to scan storage '{storage}': {e}")
@@ -2426,8 +2573,8 @@ class VM:
     def clone(self, node, vmid, newid, config=None, is_lxc=False):
         return self.client.vm_clone(node, vmid, newid, config, is_lxc)
 
-    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
-        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number, interactive)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None):
+        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number)
 
     def snapshot_list(self, node, vmid, is_lxc=False):
         return self.client.vm_snapshot_list(node, vmid, is_lxc)
@@ -2575,8 +2722,8 @@ class Container(VM):
     def clone(self, node, vmid, newid, config=None):
         return super().clone(node, vmid, newid, config, is_lxc=True)
 
-    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None, interactive=False):
-        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number, interactive=interactive)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None):
+        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number)
 
     def snapshot_list(self, node, vmid):
         return super().snapshot_list(node, vmid, is_lxc=True)
@@ -2779,7 +2926,8 @@ def poll_task_until_complete(client: ProxmoxClient, node: str, upid: str, timeou
     :param poll_interval: Polling interval in seconds
     :return: True if successful, raises exception otherwise
     """
-    return client.poll_task(node, upid, timeout, poll_interval)
+    result = client.poll_task(node, upid, timeout, poll_interval)
+    return result['success']
 
 # Utility function to load client from config
 def load_client():
@@ -2802,9 +2950,11 @@ def load_client():
         config = ProxmoxConfig()
         config.host = raw_config['proxmox'].get('host')
         config.verify_ssl = raw_config['proxmox'].get('verify_ssl', True)
+        config.timeout = raw_config['proxmox'].get('timeout', 30)
+        config.auto_poll = raw_config['proxmox'].get('auto_poll', True)
 
     # Load token
     with open(token_path, 'r') as f:
         token = f.read().strip()
 
-    return ProxmoxClient(config.host, token, config.verify_ssl)
+    return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)

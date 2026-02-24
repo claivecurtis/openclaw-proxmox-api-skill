@@ -1,0 +1,6 @@
+proxmox:
+  host: pve  # Change to your Proxmox server hostname or IP
+  port: 8006
+  token_path: workspace/secrets/pve-token.txt
+  timeout: 300  # seconds for task polling
+  verify_ssl: true

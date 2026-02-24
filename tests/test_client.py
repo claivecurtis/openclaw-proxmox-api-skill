@@ -98,10 +98,76 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_action('node1', 101, 'start')
+        upid = client.vm_action('node1', 101, 'start', auto_poll=False)  # Explicit async
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:some:task:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/status/start', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_vm_action_auto_poll(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:some:task:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_response_poll = Mock()
+        mock_response_poll.json.return_value = {'data': {'status': 'stopped', 'exitstatus': 'OK'}}
+        mock_response_poll.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response_post
+        mock_session.get.side_effect = [mock_response_version, mock_response_poll]
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        result = client.vm_action('node1', 101, 'start', auto_poll=True)
+
+        assert result == {'upid': 'UPID:node1:00000001:00000002:00000003:some:task:', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
+        mock_session.post.assert_called_once()
+        assert mock_session.get.call_count == 2
+
+    @patch('client.requests.Session')
+    def test_vm_action_default_auto_poll_true(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:some:task:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_response_poll = Mock()
+        mock_response_poll.json.return_value = {'data': {'status': 'stopped', 'exitstatus': 'OK'}}
+        mock_response_poll.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response_post
+        mock_session.get.side_effect = [mock_response_version, mock_response_poll]
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        result = client.vm_action('node1', 101, 'start')  # Default auto_poll=True
+
+        assert result == {'upid': 'UPID:node1:00000001:00000002:00000003:some:task:', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
+        mock_session.post.assert_called_once()
+        assert mock_session.get.call_count == 2
+
+    @patch('client.requests.Session')
+    def test_vm_action_config_auto_poll_false(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:some:task:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response_post
+        mock_session.get.return_value = mock_response_version
+
+        client = ProxmoxClient('pve.example.com', 'token123', True, timeout=30, auto_poll=False)
+        result = client.vm_action('node1', 101, 'start')  # Config auto_poll=False, no polling
+
+        assert result == 'UPID:node1:00000001:00000002:00000003:some:task:'
+        mock_session.post.assert_called_once()
+        assert mock_session.get.call_count == 1  # Only version check, no poll
 
     @patch('client.requests.Session')
     def test_poll_task_success(self, mock_session_class):
@@ -121,7 +187,7 @@ class TestProxmoxClient:
             with patch('time.time', side_effect=[0, 1, 2]):
                 result = client.poll_task('node1', 'upid123', timeout=10, poll_interval=1)
 
-        assert result is True
+        assert result == {'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
         assert mock_sleep.call_count == 0
 
     @patch('client.requests.Session')
@@ -135,8 +201,8 @@ class TestProxmoxClient:
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
 
-        with pytest.raises(ProxmoxAPIError, match="Task upid123 failed"):
-            client.poll_task('node1', 'upid123')
+        result = client.poll_task('node1', 'upid123')
+        assert result == {'success': False, 'exitstatus': 'ERROR', 'status': 'stopped'}
 
     @patch('client.requests.Session')
     def test_poll_task_timeout(self, mock_session_class):
@@ -330,7 +396,7 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_create('node1', 101, {'name': 'test-vm'})
+        upid = client.vm_create('node1', 101, {'name': 'test-vm'}, auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:create:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu', json={'vmid': 101, 'name': 'test-vm'}, verify=True, timeout=30)
@@ -352,7 +418,7 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_delete('node1', 101)
+        upid = client.vm_delete('node1', 101, auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:delete:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101', json={}, verify=True, timeout=30)
@@ -418,12 +484,22 @@ class TestProxmoxClient:
 
     @patch('client.requests.Session')
     def test_storage_create(self, mock_session_class):
+        import requests
         mock_session = Mock()
         mock_session_class.return_value = mock_session
-        mock_response = Mock()
-        mock_response.json.return_value = {}
-        mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        http_error = requests.exceptions.HTTPError("404 Client Error")
+        http_error.response = Mock()
+        http_error.response.status_code = 404
+        mock_response_status = Mock()
+        mock_response_status.raise_for_status.side_effect = http_error
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {}
+        mock_response_post.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_version, mock_response_status]
+        mock_session.post.return_value = mock_response_post
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
         client.storage_create('nfs1', {'type': 'nfs', 'server': 'nfs.example.com'})
@@ -564,13 +640,15 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_clone('node1', 101, 102, {'name': 'clone-vm'})
+        upid = client.vm_clone('node1', 101, 102, {'name': 'clone-vm'}, auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:clone:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/clone', json={'newid': 102, 'name': 'clone-vm'}, verify=True, timeout=30)
 
+    @patch('client.load_snapshot_settings')
     @patch('client.requests.Session')
-    def test_vm_snapshot_create(self, mock_session_class):
+    def test_vm_snapshot_create(self, mock_session_class, mock_load_snapshot_settings):
+        mock_load_snapshot_settings.return_value = {'next_number': 1}
         mock_session = Mock()
         mock_session_class.return_value = mock_session
         mock_response = Mock()
@@ -579,10 +657,30 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_snapshot_create('node1', 101, 'snap1', 'Test snapshot')
+        upid = client.vm_snapshot_create('node1', 101, 'snap1', 'Test snapshot', auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:snapshot:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': 'snap1', 'description': 'Test snapshot'}, verify=True, timeout=30)
+
+    @patch('client.save_snapshot_settings')
+    @patch('client.load_snapshot_settings')
+    @patch('client.requests.Session')
+    def test_vm_snapshot_create_auto_name(self, mock_session_class, mock_load_settings, mock_save_settings):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:snapshot:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+        mock_load_settings.return_value = {'naming_convention': 'aiagent-snap-{number:04d}', 'next_number': 5}
+        mock_save_settings.return_value = None
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        upid = client.vm_snapshot_create('node1', 101, auto_poll=False)
+
+        assert upid == 'UPID:node1:00000001:00000002:00000003:snapshot:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot', json={'snapname': 'aiagent-snap-0005'}, verify=True, timeout=30)
+        mock_save_settings.assert_called_with({'naming_convention': 'aiagent-snap-{number:04d}', 'next_number': 6})
 
     @patch('client.requests.Session')
     def test_vm_snapshot_list(self, mock_session_class):
@@ -621,13 +719,13 @@ class TestProxmoxClient:
         mock_response = Mock()
         mock_response.json.return_value = {'data': 'UPID:node1:00000001:00000002:00000003:delete:'}
         mock_response.raise_for_status.return_value = None
-        mock_session.post.return_value = mock_response
+        mock_session.delete.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_snapshot_delete('node1', 101, 'snap1')
+        upid = client.vm_snapshot_delete('node1', 101, 'snap1', auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:delete:'
-        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot/snap1', json={}, verify=True, timeout=30)
+        mock_session.delete.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/snapshot/snap1', verify=True, timeout=30)
 
     @patch('client.requests.Session')
     def test_vm_migrate(self, mock_session_class):
@@ -639,7 +737,7 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_migrate('node1', 101, 'node2', online=False)
+        upid = client.vm_migrate('node1', 101, 'node2', online=False, auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:migrate:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/migrate', json={'target': 'node2', 'online': 0}, verify=True, timeout=30)
@@ -668,7 +766,7 @@ class TestProxmoxClient:
         mock_session.post.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        upid = client.vm_move_volume('node1', 101, 'scsi0', 'nfs')
+        upid = client.vm_move_volume('node1', 101, 'scsi0', 'nfs', auto_poll=False)
 
         assert upid == 'UPID:node1:00000001:00000002:00000003:move:'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/qemu/101/move_disk', json={'disk': 'scsi0', 'storage': 'nfs'}, verify=True, timeout=30)
@@ -806,6 +904,29 @@ class TestProxmoxClient:
 
         assert upid == 'UPID:node1:123:scan'
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/storage/local/scan', json={}, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_storage_scan_default_auto_poll_true(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response_post = Mock()
+        mock_response_post.json.return_value = {'data': 'UPID:cluster:00000001:00000002:00000003:scan:'}
+        mock_response_post.raise_for_status.return_value = None
+        mock_response_poll = Mock()
+        mock_response_poll.json.return_value = {'data': {'status': 'stopped', 'exitstatus': 'OK'}}
+        mock_response_poll.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response_post
+        mock_session.get.side_effect = [mock_response_version, mock_response_poll]
+
+        client = ProxmoxClient('pve.example.com', 'token123', True)
+        result = client.storage_scan('local', auto_poll=True)
+
+        assert result == {'upid': 'UPID:cluster:00000001:00000002:00000003:scan:', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
+        mock_session.post.assert_called_once()
+        assert mock_session.get.call_count == 2
 
     @patch('client.requests.Session')
     def test_cluster_firewall(self, mock_session_class):

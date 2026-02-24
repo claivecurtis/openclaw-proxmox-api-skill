@@ -51,6 +51,14 @@ Run example scripts in `examples/`:
 ### Async Handling
 Operations return UPID; poll `/nodes/{node}/tasks/{upid}/status` until `status: stopped`.
 
+For convenience, async methods default to `auto_poll=True` for simplicity; set `auto_poll=False` for async/manual polling.
+
+Example:
+```python
+result = client.vm_start('node1', 101)  # Polls automatically and returns {'upid': '...', 'success': True, 'exitstatus': 'OK', 'status': 'stopped'}
+upid = client.vm_start('node1', 102, auto_poll=False)  # Returns UPID immediately for manual polling
+```
+
 ### Safety
 Destructive actions require confirmation.
 

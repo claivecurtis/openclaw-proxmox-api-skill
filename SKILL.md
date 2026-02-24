@@ -22,8 +22,8 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    [ ! -f skill/secrets/pve-token.txt ] && touch skill/secrets/pve-token.txt
    ```
 
-   Edit config/token as needed.
-3. settings.json is automatically created and managed (gitignored) for snapshot naming conventions.
+   Edit `secrets/config.proxmox.yaml` and `secrets/pve-token.txt` as needed.
+3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
 ### Workflows
 
@@ -35,12 +35,12 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 #### VM Power Management
 - **Script:** `scripts/client.py` `vm_action(node, vmid, action)`
 - **Actions:** start, stop, reboot, shutdown, suspend, resume
-- **Description:** Performs power actions on a specific VM. Asynchronous actions return UPID and require polling.
+- **Description:** Performs power actions on a specific VM. Defaults to auto_poll=True for simplicity; returns status dict on completion. Set auto_poll=False for manual polling.
 - **Safety:** Destructive actions (stop, reset) require confirmation.
 
 #### Task Polling
-- **Script:** `scripts/client.py` `poll_task(node, upid)`
-- **Description:** Monitors asynchronous tasks until completion.
+- **Script:** `scripts/client.py` `poll_task(node, upid)` or `poll_cluster_task(upid)` for cluster tasks
+- **Description:** Monitors asynchronous tasks until completion. Most async methods default to auto_poll=True and return status dict directly.
 - **Timeout:** Default 300s, poll every 5s.
 
 #### Advanced Operations
@@ -52,7 +52,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 
 #### Snapshot Creation
 - **Script:** `scripts/client.py` `vm_snapshot_create(node, vmid, snapname=None, change_number=None)`
-- **Description:** Creates a snapshot with automatic naming if not specified. Uses "aiagent-snap-NNNN" convention or custom "aiagent-snap-{change_number}".
+- **Description:** Creates a snapshot with automatic naming if not specified. Uses configurable naming convention from `config.proxmox.yaml` or custom "aiagent-snap-{change_number}".
 - **Examples:**
   - Auto-generate name: `vm_snapshot_create('<node>', <vmid>)`
   - Custom change number: `vm_snapshot_create('<node>', <vmid>, change_number=1234)`
