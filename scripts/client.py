@@ -2714,10 +2714,9 @@ def poll_task_until_complete(client: ProxmoxClient, node: str, upid: str, timeou
 
 # Utility function to load client from config
 def load_client():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    secrets_dir = os.path.join(script_dir, '../secrets')
-    config_path = os.path.join(secrets_dir, 'config.proxmox.yaml')
-    token_path = os.path.join(secrets_dir, 'pve-token.txt')
+    workspace = os.getenv('OPENCLAW_WORKSPACE', os.path.dirname(os.path.dirname(__file__)))
+    config_path = os.path.join(workspace, 'secrets', 'config.proxmox.yaml')
+    token_path = os.path.join(workspace, 'secrets', 'pve-token.txt')
 
     # Load config
     import yaml
