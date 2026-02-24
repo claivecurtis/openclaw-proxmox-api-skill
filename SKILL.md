@@ -61,6 +61,33 @@ exec workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill" 
 ```
 Expected: `Auth OK` (no PII/hosts).
 
+### Output Formatting Policy
+Apply this globally to all commands and outputs (e.g., Proxmox, exec results, etc.). Preserve full context with no data loss in JSON representations.
+
+- **Discord (channel == discord):** Use compact bullets (exclude raw JSON).
+- **Web/TUI/Main Sessions:** Use full raw/tables/JSON.
+- **General Rules (All Platforms):**
+  - **No markdown tables in Discord/WhatsApp:** Use bullet lists instead.
+  - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`.
+  - **WhatsApp:** No headers — use **bold** or CAPS for emphasis.
+
+**Example (Discord Output for Proxmox VM Status):**
+
+- VM 100: running, 2GB RAM, 1 CPU
+- CPU: 15%, uptime: 2 days
+
+**Example (Web/TUI Output):**
+
+```json
+{"vmid":100,"name":"test-vm","status":"running","uptime":172800,"cpus":1,"mem":2147483648,"maxmem":2147483648,"cpu":0.15}
+```
+
+Or in table format:
+
+| VMID | Name    | Status   | Uptime (s) | CPUs | Mem (B)    | Max Mem (B) | CPU % |
+|------|---------|----------|------------|------|------------|-------------|-------|
+| 100  | test-vm | running | 172800    | 1    | 2147483648 | 2147483648 | 0.15  |
+
 ## Dependencies
 See `requirements.txt` for Python packages.
 
