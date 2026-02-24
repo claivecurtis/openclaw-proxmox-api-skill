@@ -28,3 +28,4 @@ Thumbs.db
 
 # Secrets (do not commit)
 secrets/
+settings.json

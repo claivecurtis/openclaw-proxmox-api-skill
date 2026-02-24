@@ -3,6 +3,8 @@ import json
 import time
 import logging
 import os
+import re
+import threading
 from typing import Dict, List, Optional, Any
 try:
     from pydantic import BaseModel, ValidationError
@@ -12,9 +14,64 @@ except ImportError:
     BaseModel = object
     ValidationError = Exception
 
+# Global settings lock for thread safety
+settings_lock = threading.Lock()
+
+# Default settings
+DEFAULT_SETTINGS = {
+    "naming_convention": "aiagent-snap-{number:04d}",
+    "next_snap_number": 1
+}
+
+# Load settings with thread lock and global defaults
+def load_settings(interactive=False):
+    settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+    with settings_lock:
+        if os.path.exists(settings_path):
+            with open(settings_path, 'r') as f:
+                return json.load(f)
+        else:
+            if interactive:
+                default = DEFAULT_SETTINGS["naming_convention"]
+                user_input = input(f"Naming convention? (default {default}) [input] ").strip()
+                convention = user_input if user_input else default
+                settings = {"naming_convention": convention, "next_snap_number": DEFAULT_SETTINGS["next_snap_number"]}
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                return settings
+            else:
+                settings = DEFAULT_SETTINGS.copy()
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                return settings
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Validation regexes
+NAME_REGEX = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]*$')  # snapshot names
+VMID_REGEX = re.compile(r'^\d+$')  # VMID: digits only
+NODE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # node names: alphanumeric, hyphens, underscores
+STORAGE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # storage names: alphanumeric, hyphens, underscores
+
+def validate_vmid(vmid):
+    """Validate VMID: must be digits, >0"""
+    if not VMID_REGEX.match(str(vmid)):
+        raise ValueError(f"Invalid VMID '{vmid}': must be a positive integer")
+    vmid_int = int(vmid)
+    if vmid_int <= 0:
+        raise ValueError(f"Invalid VMID '{vmid}': must be > 0")
+
+def validate_node(node):
+    """Validate node name"""
+    if not NODE_REGEX.match(node):
+        raise ValueError(f"Invalid node name '{node}': must contain only letters, numbers, hyphens, underscores")
+
+def validate_storage(storage):
+    """Validate storage name"""
+    if not STORAGE_REGEX.match(storage):
+        raise ValueError(f"Invalid storage name '{storage}': must contain only letters, numbers, hyphens, underscores")
 
 # Config validation
 class ProxmoxConfig(BaseModel):
@@ -141,7 +198,8 @@ class ProxmoxClient:
                     for member in pool.get('members', []):
                         pool_members[f"{member['type']}/{member['vmid']}"] = pool['poolid']
                 for vm in vms:
-                    vm['pool'] = pool_members.get(f"{vm['type']}/{vm['vmid']}", None)
+                    vmid = vm.get('vmid', vm.get('id'))
+                    vm['pool'] = pool_members.get(f"{vm['type']}/{vmid}", None)
             except ProxmoxAPIError:
                 logger.debug("Failed to get pool information")
             logger.info(f"Retrieved {len(vms)} VMs with pool info")
@@ -234,6 +292,14 @@ class ProxmoxClient:
         :param config: Storage configuration dictionary
         :return: None
         """
+        validate_storage(storage_id)
+        # Idempotency check: ensure storage does not already exist
+        try:
+            self._get(f'/storage/{storage_id}')
+            raise ProxmoxAPIError(f"Storage '{storage_id}' already exists")
+        except ProxmoxAPIError as e:
+            if 'HTTP 404' not in str(e):
+                raise
         path = '/storage'
         data = {'id': storage_id, **config}
         try:
@@ -353,6 +419,8 @@ class ProxmoxClient:
             pools_summary = self._get('/pools')['data']
             pools = []
             for pool in pools_summary:
+                if not isinstance(pool, dict) or 'poolid' not in pool:
+                    continue
                 pool_details = self._get(f'/pools/{pool["poolid"]}')['data']
                 pools.append(pool_details)
             logger.info(f"Retrieved {len(pools)} resource pools with members")
@@ -369,6 +437,13 @@ class ProxmoxClient:
         :param comment: Optional comment
         :return: None
         """
+        # Idempotency check: ensure pool does not already exist
+        try:
+            self._get(f'/pools/{poolid}')
+            raise ProxmoxAPIError(f"Resource pool '{poolid}' already exists")
+        except ProxmoxAPIError as e:
+            if 'HTTP 404' not in str(e):
+                raise
         path = f'/pools'
         data = {'poolid': poolid}
         if comment:
@@ -443,18 +518,6 @@ class ProxmoxClient:
         :return: List of cluster tasks
         """
         return self._get('/cluster/tasks')
-
-    def cluster_logs(self, limit=None):
-        """
-        Get cluster logs.
-
-        :param limit: Maximum number of log entries to return
-        :return: Cluster log entries
-        """
-        params = {}
-        if limit:
-            params['limit'] = limit
-        return self._get('/cluster/log', params)
 
     def cluster_backup(self):
         """
@@ -582,7 +645,9 @@ class ProxmoxClient:
         :return: Log entries
         """
         path = '/cluster/log'
-        params = {'limit': limit}
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
         try:
             logs = self._get(path, params)
             logger.info(f"Retrieved {len(logs['data'])} cluster log entries")
@@ -933,23 +998,6 @@ class ProxmoxClient:
             logger.error(f"Failed to get syslog for node {node}: {e}")
             raise
 
-    def node_rrd(self, node, **kwargs):
-        """
-        Get node RRD data.
-
-        :param node: Node name
-        :param kwargs: Additional parameters (e.g., timeframe='hour')
-        :return: RRD data
-        """
-        path = f'/nodes/{node}/rrd'
-        try:
-            rrd = self._get(path, kwargs)
-            logger.info(f"Retrieved RRD data for node {node}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for node {node}: {e}")
-            raise
-
     def node_vncshell(self, node):
         """
         Get VNC shell for node.
@@ -1052,24 +1100,6 @@ class ProxmoxClient:
             logger.error(f"Failed Ceph operation on node {node}: {e}")
             raise
 
-    def node_rrd(self, node, timeframe='hour'):
-        """
-        Get RRD data for node.
-
-        :param node: Node name
-        :param timeframe: Timeframe
-        :return: RRD data
-        """
-        path = f'/nodes/{node}/rrd'
-        params = {'timeframe': timeframe}
-        try:
-            rrd = self._get(path, params)
-            logger.info(f"Retrieved RRD data for node {node}")
-            return rrd['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to get RRD data for node {node}: {e}")
-            raise
-
     def get_vm_status(self, node, vmid, is_lxc=False):
         """
         Get full status of a VM.
@@ -1099,6 +1129,15 @@ class ProxmoxClient:
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the creation task
         """
+        validate_node(node)
+        validate_vmid(vmid)
+        # Idempotency check: ensure VM does not already exist
+        try:
+            self.get_vm_status(node, vmid, is_lxc)
+            raise ProxmoxAPIError(f"VM {vmid} already exists on node {node}")
+        except Exception as e:
+            if 'HTTP 404' not in str(e):
+                raise  # re-raise if not "not found"
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}'
         data = {'vmid': vmid, **config}
@@ -1120,6 +1159,17 @@ class ProxmoxClient:
         :param is_lxc: True if LXC, False for QEMU
         :return: UPID of the deletion task
         """
+        validate_node(node)
+        validate_vmid(vmid)
+        # Idempotency check: ensure VM exists
+        try:
+            self.get_vm_status(node, vmid, is_lxc)
+        except Exception as e:
+            if 'HTTP 404' in str(e):
+                logger.info(f"VM {vmid} does not exist on node {node}, skipping delete")
+                return None
+            else:
+                raise
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}'
         try:
@@ -1199,17 +1249,46 @@ class ProxmoxClient:
             logger.error(f"Failed to clone {vm_type} {vmid}: {e}")
             raise
 
-    def vm_snapshot_create(self, node, vmid, snapname, description=None, is_lxc=False):
+    def vm_snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
         """
         Create a VM snapshot.
 
         :param node: Node name
         :param vmid: VM ID
-        :param snapname: Snapshot name
+        :param snapname: Snapshot name (if provided, validated: starts with letter, only letters/numbers/hyphens/underscores)
         :param description: Optional description
         :param is_lxc: True if LXC, False for QEMU
+        :param change_number: Optional change number for custom naming
+        :param interactive: If True, prompt for confirmation of generated name
         :return: UPID of the snapshot task
         """
+        validate_node(node)
+        validate_vmid(vmid)
+        settings = load_settings(interactive=interactive)
+        if snapname is None:
+            if change_number is not None:
+                snapname = f"aiagent-snap-{change_number}"
+            else:
+                number = settings['next_snap_number']
+                snapname = settings['naming_convention'].format(number=number)
+                # Increment next number
+                settings['next_snap_number'] = number + 1
+                settings_path = os.path.join(os.path.dirname(__file__), '..', 'settings.json')
+                with open(settings_path, 'w') as f:
+                    json.dump(settings, f, indent=2)
+                if interactive:
+                    logger.info(f"Generated snapshot name: {snapname}. Proceeding with creation.")
+        # Pre-validate snapshot name
+        if not NAME_REGEX.match(snapname):
+            raise ProxmoxAPIError(f"Invalid snapshot name '{snapname}': must start with a letter and contain only letters, numbers, hyphens, and underscores.")
+        # Idempotency check: ensure snapshot does not already exist
+        try:
+            existing_snaps = self.vm_snapshot_list(node, vmid, is_lxc)
+        except Exception:
+            existing_snaps = []
+        existing_names = [s['name'] for s in existing_snaps]
+        if snapname in existing_names:
+            raise ProxmoxAPIError(f"Snapshot '{snapname}' already exists for VM {vmid}")
         vm_type = 'lxc' if is_lxc else 'qemu'
         path = f'/nodes/{node}/{vm_type}/{vmid}/snapshot'
         data = {'snapname': snapname}
@@ -1476,11 +1555,12 @@ class ProxmoxClient:
         :param node: Node name
         :param upid: Unique Process ID
         :param timeout: Timeout in seconds
-        :param poll_interval: Polling interval in seconds
+        :param poll_interval: Initial polling interval in seconds (with backoff)
         :return: True if successful, raises exception otherwise
         """
         path = f'/nodes/{node}/tasks/{upid}/status'
         start_time = time.time()
+        current_interval = poll_interval
         while time.time() - start_time < timeout:
             try:
                 status = self._get(path)
@@ -1498,7 +1578,8 @@ class ProxmoxClient:
                     logger.debug(f"Task {upid} still running...")
                 else:
                     logger.warning(f"Task {upid} in unknown status: {task_status}")
-                time.sleep(poll_interval)
+                time.sleep(min(current_interval, 30))
+                current_interval *= 1.5
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code == 404:
                     raise ProxmoxAPIError(f"Task {upid} not found")
@@ -1509,20 +1590,6 @@ class ProxmoxClient:
         raise TaskTimeoutError(f"Task {upid} timed out after {timeout} seconds")
 
     # Phase 3: Access Control
-    def user_list(self):
-        """
-        List users.
-
-        :return: List of users
-        """
-        try:
-            users = self._get('/access/users')
-            logger.info(f"Retrieved {len(users['data'])} users")
-            return users['data']
-        except ProxmoxAPIError as e:
-            logger.error(f"Failed to list users: {e}")
-            raise
-
     def user_create(self, userid, config):
         """
         Create a user.
@@ -1780,14 +1847,15 @@ class ProxmoxClient:
             logger.error(f"Failed to get HA status: {e}")
             raise
 
-    def cluster_resources(self):
+    def cluster_resources(self, **kwargs):
         """
         List cluster resources.
 
+        :param kwargs: Additional parameters (e.g., type='vm')
         :return: List of resources
         """
         try:
-            resources = self._get('/cluster/resources')
+            resources = self._get('/cluster/resources', params=kwargs if kwargs else None)
             logger.info(f"Retrieved {len(resources['data'])} cluster resources")
             return resources['data']
         except ProxmoxAPIError as e:
@@ -1925,16 +1993,17 @@ class ProxmoxClient:
             logger.error(f"Failed to get syslog for node '{node}': {e}")
             raise
 
-    def node_rrd(self, node, timeframe='hour'):
+    def node_rrd(self, node, timeframe='hour', **kwargs):
         """
         Get node RRD data.
 
         :param node: Node name
-        :param timeframe: Timeframe
+        :param timeframe: Timeframe (default 'hour')
+        :param kwargs: Additional parameters
         :return: RRD data
         """
         path = f'/nodes/{node}/rrd'
-        params = {'timeframe': timeframe}
+        params = {'timeframe': timeframe, **kwargs}
         try:
             rrd = self._get(path, params)
             logger.info(f"Retrieved RRD data for node '{node}'")
@@ -2357,8 +2426,8 @@ class VM:
     def clone(self, node, vmid, newid, config=None, is_lxc=False):
         return self.client.vm_clone(node, vmid, newid, config, is_lxc)
 
-    def snapshot_create(self, node, vmid, snapname, description=None, is_lxc=False):
-        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, is_lxc=False, change_number=None, interactive=False):
+        return self.client.vm_snapshot_create(node, vmid, snapname, description, is_lxc, change_number, interactive)
 
     def snapshot_list(self, node, vmid, is_lxc=False):
         return self.client.vm_snapshot_list(node, vmid, is_lxc)
@@ -2476,20 +2545,20 @@ class Container(VM):
             containers = [r for r in resources['data'] if r['type'] == 'lxc']
             return containers
 
-    def status(self, vmid, node):
-        return super().status(vmid, node, is_lxc=True)
+    def status(self, node, vmid):
+        return super().status(node, vmid, is_lxc=True)
 
-    def start(self, vmid, node):
-        return super().start(vmid, node, is_lxc=True)
+    def start(self, node, vmid):
+        return super().start(node, vmid, is_lxc=True)
 
-    def stop(self, vmid, node):
-        return super().stop(vmid, node, is_lxc=True)
+    def stop(self, node, vmid):
+        return super().stop(node, vmid, is_lxc=True)
 
-    def reboot(self, vmid, node):
-        return super().reboot(vmid, node, is_lxc=True)
+    def reboot(self, node, vmid):
+        return super().reboot(node, vmid, is_lxc=True)
 
-    def shutdown(self, vmid, node, timeout=None):
-        return super().shutdown(vmid, node, is_lxc=True, timeout=timeout)
+    def shutdown(self, node, vmid, timeout=None):
+        return super().shutdown(node, vmid, is_lxc=True, timeout=timeout)
 
     def create(self, node, vmid, config):
         return super().create(node, vmid, config, is_lxc=True)
@@ -2506,8 +2575,8 @@ class Container(VM):
     def clone(self, node, vmid, newid, config=None):
         return super().clone(node, vmid, newid, config, is_lxc=True)
 
-    def snapshot_create(self, node, vmid, snapname, description=None):
-        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True)
+    def snapshot_create(self, node, vmid, snapname=None, description=None, change_number=None, interactive=False):
+        return super().snapshot_create(node, vmid, snapname, description, is_lxc=True, change_number=change_number, interactive=interactive)
 
     def snapshot_list(self, node, vmid):
         return super().snapshot_list(node, vmid, is_lxc=True)
