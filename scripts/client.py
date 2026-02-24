@@ -1959,16 +1959,17 @@ class ProxmoxClient:
             logger.error(f"Failed to get syslog for node '{node}': {e}")
             raise
 
-    def node_rrd(self, node, timeframe='hour'):
+    def node_rrd(self, node, timeframe='hour', **kwargs):
         """
         Get node RRD data.
 
         :param node: Node name
-        :param timeframe: Timeframe
+        :param timeframe: Timeframe (default 'hour')
+        :param kwargs: Additional parameters
         :return: RRD data
         """
         path = f'/nodes/{node}/rrd'
-        params = {'timeframe': timeframe}
+        params = {'timeframe': timeframe, **kwargs}
         try:
             rrd = self._get(path, params)
             logger.info(f"Retrieved RRD data for node '{node}'")
