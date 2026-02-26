@@ -3,6 +3,9 @@
 ## Overview
 This skill provides integration with Proxmox Virtual Environment (PVE) API for managing virtual machines, containers, nodes, and cluster resources. It uses the REST API with token-based authentication for secure remote management.
 
+## Live Verify
+Memory = historical (e.g., VM126 snap created 02-24). **Always API-validate live** before reporting current state (e.g., /cluster/resources > recall). No assumptions/pre-narrate.
+
 ## Triggers
 Use this skill when the user mentions:
 - "proxmox" or "pve"
