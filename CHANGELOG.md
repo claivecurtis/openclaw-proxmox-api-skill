@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Multi-cluster and PBS support: config lists for clusters/pbs, client factories with cluster selection (PR #28)
 - PBS backup API support (PR #27)
 - AI execution reminder (PR #26)
 - Live Verify policy to prevent stale memory reports (PR #25)

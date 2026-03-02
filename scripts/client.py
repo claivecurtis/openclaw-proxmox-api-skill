@@ -94,12 +94,20 @@ def validate_storage(storage):
 
 # Config validation
 class ProxmoxConfig(BaseModel):
+    name: str
     host: str
     user: Optional[str] = None
     token: Optional[str] = None
     verify_ssl: bool = True
     timeout: int = 30
     auto_poll: bool = True
+    pbs: Optional[dict] = None
+
+class PBSConfig(BaseModel):
+    name: str
+    endpoint: str
+    token: str
+    verify_ssl: bool = True
 
 class ProxmoxAuthError(Exception):
     pass
@@ -2556,8 +2564,9 @@ class VM:
     """
     Wrapper class for VM operations.
     """
-    def __init__(self, client: ProxmoxClient):
-        self.client = client
+    def __init__(self, cluster_name=None):
+        self.client = load_client(cluster_name)
+        self.cluster_name = cluster_name
 
     def list(self, node=None):
         """
@@ -2658,8 +2667,9 @@ class Storage:
     """
     Wrapper class for Storage operations.
     """
-    def __init__(self, client: ProxmoxClient):
-        self.client = client
+    def __init__(self, cluster_name=None):
+        self.client = load_client(cluster_name)
+        self.cluster_name = cluster_name
 
     def list(self):
         return self.client.list_storage_pools()
@@ -2970,55 +2980,95 @@ def poll_task_until_complete(client: ProxmoxClient, node: str, upid: str, timeou
     result = client.poll_task(node, upid, timeout, poll_interval)
     return result['success']
 
-# Utility function to load client from config
-def load_client():
+# Utility function to load config
+def load_config():
     skill_dir = os.path.dirname(os.path.dirname(__file__))
     config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
-    token_path = os.path.join(skill_dir, 'secrets', 'pve-token.txt')
-
-    # Load config
     import yaml
     with open(config_path, 'r') as f:
         raw_config = yaml.safe_load(f)
+    return raw_config
 
-    # Validate config
+# Utility function to load client from config
+def load_client(cluster_name=None):
+    raw_config = load_config()
+    clusters = raw_config.get('clusters', [])
+    if not clusters:
+        # Fallback to old single config
+        if 'proxmox' in raw_config:
+            clusters = [raw_config['proxmox']]
+            clusters[0]['name'] = 'default'
+        else:
+            raise ValueError("No clusters configured")
+
+    # Find cluster
+    if cluster_name is None:
+        # Default to 'default' or first
+        cluster_config = next((c for c in clusters if c.get('name') == 'default'), clusters[0])
+    else:
+        cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
+        if cluster_config is None:
+            raise ValueError(f"Cluster '{cluster_name}' not found")
+
+    # Validate
     if PYDANTIC_AVAILABLE:
         try:
-            config = ProxmoxConfig(**raw_config['proxmox'])
+            config = ProxmoxConfig(**cluster_config)
         except ValidationError as e:
-            raise ValueError(f"Invalid config: {e}")
+            raise ValueError(f"Invalid cluster config: {e}")
     else:
         config = ProxmoxConfig()
-        config.host = raw_config['proxmox'].get('host')
-        config.verify_ssl = raw_config['proxmox'].get('verify_ssl', True)
-        config.timeout = raw_config['proxmox'].get('timeout', 30)
-        config.auto_poll = raw_config['proxmox'].get('auto_poll', True)
+        config.name = cluster_config.get('name')
+        config.host = cluster_config.get('host')
+        config.verify_ssl = cluster_config.get('verify_ssl', True)
+        config.timeout = cluster_config.get('timeout', 30)
+        config.auto_poll = cluster_config.get('auto_poll', True)
 
-    # Load token from yaml, fallback to txt for backward compatibility
-    token = raw_config['proxmox'].get('token')
+    token = cluster_config.get('token')
     if token is None:
-        # Fallback to txt file (deprecated)
-        with open(token_path, 'r') as f:
-            token = f.read().strip()
+        # Fallback to old txt file (deprecated)
+        token_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'secrets', 'pve-token.txt')
+        try:
+            with open(token_path, 'r') as f:
+                token = f.read().strip()
+        except FileNotFoundError:
+            raise ValueError("Token not found in config or pve-token.txt")
 
     return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
 
 # Utility function to load PBS client from config
-def load_pbs_client():
-    skill_dir = os.path.dirname(os.path.dirname(__file__))
-    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+def load_pbs_client(cluster_name=None, pbs_name=None):
+    raw_config = load_config()
+    clusters = raw_config.get('clusters', [])
+    global_pbs = raw_config.get('pbs', [])
 
-    # Load config
-    import yaml
-    with open(config_path, 'r') as f:
-        raw_config = yaml.safe_load(f)
+    # Find PBS config
+    pbs_config = None
+    if cluster_name:
+        cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
+        if cluster_config and 'pbs' in cluster_config:
+            pbs_config = cluster_config['pbs']
+    if not pbs_config:
+        # Look in global pbs
+        if pbs_name:
+            pbs_config = next((p for p in global_pbs if p.get('name') == pbs_name), None)
+        else:
+            pbs_config = global_pbs[0] if global_pbs else None
 
-    pbs_config = raw_config.get('pbs', {})
-    endpoint = pbs_config.get('endpoint')
-    token = pbs_config.get('token')
-    verify_ssl = pbs_config.get('verify_ssl', True)
+    if not pbs_config:
+        raise ValueError("PBS config not found")
 
-    if not endpoint or not token:
-        raise ValueError("PBS config missing endpoint or token")
+    # Validate
+    if PYDANTIC_AVAILABLE:
+        try:
+            config = PBSConfig(**pbs_config)
+        except ValidationError as e:
+            raise ValueError(f"Invalid PBS config: {e}")
+    else:
+        config = PBSConfig()
+        config.name = pbs_config.get('name')
+        config.endpoint = pbs_config.get('endpoint')
+        config.token = pbs_config.get('token')
+        config.verify_ssl = pbs_config.get('verify_ssl', True)
 
-    return PBSClient(endpoint, token, verify_ssl)
+    return PBSClient(config.endpoint, config.token, config.verify_ssl)

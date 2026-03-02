@@ -1,16 +1,27 @@
-proxmox:
-  host: 192.168.1.100  # Proxmox IP
-  port: 8006
-  user: 'your-user@realm'  # Generic Proxmox user (e.g., 'your-user@realm')
-  token: your-api-token-here  # API token from Proxmox UI
-  timeout: 300  # seconds for task polling
-  verify_ssl: false  # Self-signed
-  auto_poll: true  # Default auto-polling for async tasks
+clusters:
+  - name: default  # Cluster name for selection
+    host: 192.168.1.100  # Proxmox IP
+    port: 8006
+    user: 'your-user@realm'  # Generic Proxmox user (e.g., 'your-user@realm')
+    token: your-api-token-here  # API token from Proxmox UI
+    timeout: 300  # seconds for task polling
+    verify_ssl: false  # Self-signed
+    auto_poll: true  # Default auto-polling for async tasks
+    pbs:  # Optional per-cluster PBS
+      name: pbs-default
+      endpoint: pbs.example.com  # PBS host
+      token: your-pbs-token-here  # PBS API token
+      verify_ssl: false  # Self-signed
+  # Add more clusters as needed
+  # - name: cluster2
+  #   host: ...
+  #   token: ...
 
-pbs:
-  endpoint: pbs.example.com  # PBS host
-  token: your-pbs-token-here  # PBS API token
-  verify_ssl: false  # Self-signed
+pbs:  # Global PBS configs (optional, if not per-cluster)
+  - name: global-pbs
+    endpoint: pbs-global.example.com
+    token: your-global-pbs-token
+    verify_ssl: false
 
 snapshots:
   naming_convention: "aiagent-snap-{number:04d}"  # Template for auto-generated names

@@ -28,8 +28,14 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    [ ! -f skill/secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml
    ```
 
-   Edit `secrets/config.proxmox.yaml` with your host, user, and token. For PBS operations, also configure the `pbs` section with endpoint and token.
+   Edit `secrets/config.proxmox.yaml` with your clusters list, each with name, host, token. For PBS, configure per-cluster or global `pbs` sections.
 3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
+
+#### Multi-Cluster Support
+- Configure multiple clusters in `secrets/config.proxmox.yaml` under `clusters` list.
+- Select a cluster by passing `cluster=NAME` to operations (e.g., `vm_action(node, vmid, action, cluster='cluster1')`).
+- If no cluster specified, defaults to the first cluster or 'default' if named.
+- PBS can be per-cluster or global.
 
 ### Workflows
 
