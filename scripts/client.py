@@ -1458,6 +1458,36 @@ class ProxmoxClient:
             logger.error(f"Failed to delete snapshot '{snapname}' for {vm_type} {vmid}: {e}")
             raise
 
+    def list_vms_snapshots(self):
+        """
+        List all VMs with their snapshots.
+
+        :return: List of dicts with VMID, Name, Node, Status, Snapshots (list of names)
+        """
+        vms = self.list_vms()
+        vms_with_snaps = []
+        for vm in vms:
+            vmid = vm.get('vmid') or vm.get('id')
+            node = vm.get('node')
+            name = vm.get('name', 'None')
+            status = vm.get('status', 'unknown')
+            vm_type = vm.get('type', 'qemu')
+            is_lxc = vm_type == 'lxc'
+            try:
+                snaps = self.vm_snapshot_list(node, vmid, is_lxc)
+                if snaps:
+                    snap_names = [s['name'] for s in snaps]
+                    vms_with_snaps.append({
+                        'VMID': vmid,
+                        'Name': name,
+                        'Node': node,
+                        'Status': status,
+                        'Snapshots': snap_names
+                    })
+            except Exception as e:
+                logger.error(f"Error getting snaps for {vmid}: {e}")
+        return vms_with_snaps
+
     def vm_backup(self, node, vmid, storage, mode='snapshot', compress='gzip', is_lxc=False, auto_poll=None, **kwargs):
         """
         Backup a VM using vzdump.
