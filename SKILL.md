@@ -6,6 +6,9 @@ This skill provides integration with Proxmox Virtual Environment (PVE) API for m
 ## Live Verify (2026-02-25)
 Memory = historical (e.g., VM126 snap created 02-24). **Always API-validate live** before reporting current state (e.g., /cluster/resources > recall). No assumptions/pre-narrate.
 
+## AI Execution Reminder
+No pre-announce—verify post-tool.
+
 ## Triggers
 Use this skill when the user mentions:
 - "proxmox" or "pve"
