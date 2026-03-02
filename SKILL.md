@@ -105,7 +105,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 - All `exec` calls should set `workdir="/home/claw/.openclaw/workspace/skills/openclaw-proxmox-api-skill"` for proper module imports.
 - Use `exec` to run Python scripts for API calls.
 - Spawn `subagents` for long-running tasks (backups, migrations).
-- Send notifications via `message` tool for monitoring alerts.
+- Notify users via available channels/console/log using the `message` tool for monitoring alerts.
 
 **Example (auth test):**
 ```

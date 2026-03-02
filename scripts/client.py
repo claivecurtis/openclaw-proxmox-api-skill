@@ -2987,6 +2987,67 @@ def load_config():
     import yaml
     with open(config_path, 'r') as f:
         raw_config = yaml.safe_load(f)
+    # Auto-migrate old config to new format
+    migrated = False
+    if 'clusters' not in raw_config and 'proxmox' in raw_config:
+        # Migrate old single config
+        proxmox = raw_config['proxmox']
+        pbs = raw_config.get('pbs', {})
+        clusters = [{
+            'name': 'default',
+            'host': proxmox['host'],
+            'port': proxmox.get('port', 8006),
+            'user': proxmox.get('user'),
+            'token': proxmox['token'],
+            'timeout': proxmox.get('timeout', 300),
+            'verify_ssl': proxmox.get('verify_ssl', False),
+            'auto_poll': proxmox.get('auto_poll', True),
+        }]
+        if pbs:
+            clusters[0]['pbs'] = {
+                'name': 'pbs-default',
+                'endpoint': f"{pbs['host']}:{pbs.get('port', 8007)}",
+                'token': pbs['token'],
+                'verify_ssl': pbs.get('verify_ssl', False),
+            }
+            # Also add to global pbs
+            raw_config['pbs'] = [{
+                'name': 'pbs-default',
+                'endpoint': f"{pbs['host']}:{pbs.get('port', 8007)}",
+                'token': pbs['token'],
+                'verify_ssl': pbs.get('verify_ssl', False),
+            }]
+        raw_config['clusters'] = clusters
+        # Remove old keys
+        del raw_config['proxmox']
+        if 'pbs' in raw_config and not isinstance(raw_config['pbs'], list):
+            del raw_config['pbs']  # since we moved to list
+        migrated = True
+    # Generalize migration: merge any new params from example config
+    example_path = os.path.join(skill_dir, 'assets', 'config.proxmox.example.yaml')
+    if os.path.exists(example_path):
+        with open(example_path, 'r') as f:
+            example_config = yaml.safe_load(f)
+        # For any top-level key in example not in raw_config, add it
+        for key, value in example_config.items():
+            if key not in raw_config:
+                raw_config[key] = value
+                migrated = True
+    # Ensure defaults for new params if missing
+    if 'clusters' in raw_config:
+        for cluster in raw_config['clusters']:
+            cluster.setdefault('port', 8006)
+            cluster.setdefault('timeout', 300)
+            cluster.setdefault('verify_ssl', False)
+            cluster.setdefault('auto_poll', True)
+    if 'pbs' in raw_config and isinstance(raw_config['pbs'], list):
+        for pbs in raw_config['pbs']:
+            pbs.setdefault('verify_ssl', False)
+    if migrated:
+        # Write back migrated config
+        with open(config_path, 'w') as f:
+            yaml.dump(raw_config, f, default_flow_style=False)
+        logger.info("Config migrated and updated with new defaults")
     return raw_config
 
 # Utility function to load client from config
