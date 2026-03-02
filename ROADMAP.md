@@ -168,6 +168,8 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
     - `pbs_tasks()`: List PBS tasks. ✅ (list_tasks)
     - `pbs_sync(datastore, remote)`: Sync datastore. ✅ (sync_datastore)
     - `pbs_tape_*`: Tape backup operations (if applicable).
+    - `vm_backup(node, vmid, storage)`: Backup VM/container to storage using vzdump. ✅ (via VM.backup())
+    - `load_pbs_client()`: Load PBS client from config. ✅
 
 14. **Implement Monitoring and Logging** ✅
     - RRD data retrieval for all entities (VMs, nodes, storage, etc.). ✅ (rrd methods added)

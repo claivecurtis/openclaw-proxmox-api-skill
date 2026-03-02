@@ -7,6 +7,11 @@ proxmox:
   verify_ssl: false  # Self-signed
   auto_poll: true  # Default auto-polling for async tasks
 
+pbs:
+  endpoint: pbs.example.com  # PBS host
+  token: your-pbs-token-here  # PBS API token
+  verify_ssl: false  # Self-signed
+
 snapshots:
   naming_convention: "aiagent-snap-{number:04d}"  # Template for auto-generated names
   next_number: 1  # Next number for auto-generated names
