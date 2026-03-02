@@ -1458,6 +1458,43 @@ class ProxmoxClient:
             logger.error(f"Failed to delete snapshot '{snapname}' for {vm_type} {vmid}: {e}")
             raise
 
+    def vm_backup(self, node, vmid, storage, mode='snapshot', compress='gzip', is_lxc=False, auto_poll=None, **kwargs):
+        """
+        Backup a VM using vzdump.
+
+        :param node: Node name
+        :param vmid: VM ID
+        :param storage: Storage ID (can be PBS datastore)
+        :param mode: Backup mode ('snapshot', 'suspend', 'stop')
+        :param compress: Compression type ('gzip', 'lzo', 'none')
+        :param is_lxc: True if LXC, False for QEMU
+        :param auto_poll: If True, poll the task until completion and return status dict. Defaults to config value.
+        :param kwargs: Additional vzdump parameters
+        :return: UPID if not auto_poll, status dict if auto_poll
+        """
+        if auto_poll is None:
+            auto_poll = self.auto_poll
+        vm_type = 'lxc' if is_lxc else 'qemu'
+        path = f'/nodes/{node}/vzdump'
+        data = {
+            'vmid': vmid,
+            'storage': storage,
+            'mode': mode,
+            'compress': compress,
+            **kwargs
+        }
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"Backup of {vm_type} {vmid} to storage '{storage}' initiated, UPID: {upid}")
+            if auto_poll:
+                poll_result = self.poll_task(node, upid)
+                return {'upid': upid, **poll_result}
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to backup {vm_type} {vmid}: {e}")
+            raise
+
     def vm_migrate(self, node, vmid, target_node, online=True, is_lxc=False, auto_poll=None):
         """
         Migrate VM to another node.
@@ -2613,6 +2650,9 @@ class VM:
     def rrd(self, node, vmid, timeframe='hour', is_lxc=False):
         return self.client.vm_rrd(node, vmid, timeframe, is_lxc)
 
+    def backup(self, node, vmid, storage, mode='snapshot', compress='gzip', is_lxc=False):
+        return self.client.vm_backup(node, vmid, storage, mode, compress, is_lxc)
+
 
 class Storage:
     """
@@ -2962,3 +3002,23 @@ def load_client():
             token = f.read().strip()
 
     return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
+
+# Utility function to load PBS client from config
+def load_pbs_client():
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+
+    # Load config
+    import yaml
+    with open(config_path, 'r') as f:
+        raw_config = yaml.safe_load(f)
+
+    pbs_config = raw_config.get('pbs', {})
+    endpoint = pbs_config.get('endpoint')
+    token = pbs_config.get('token')
+    verify_ssl = pbs_config.get('verify_ssl', True)
+
+    if not endpoint or not token:
+        raise ValueError("PBS config missing endpoint or token")
+
+    return PBSClient(endpoint, token, verify_ssl)
