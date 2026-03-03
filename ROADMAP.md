@@ -190,11 +190,20 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
     - Certificate management. ✅ (node_certificates)
     - Remote migration for VMs/containers. ✅ (vm_migrate with target_node)
 
-### Phase 5: Other Integration Considerations
+### Phase 5: Multi-Cluster and PBS Support (Completed)
+
+- Implemented multi-cluster configuration: `clusters` list in config with name/host/token.
+- Added client factory: `load_client(cluster_name)` to select cluster.
+- Operations support `cluster=NAME` parameter.
+- PBS per-cluster or global: `pbs` section per cluster or global list.
+- PBS client factory: `load_pbs_client(cluster_name, pbs_name)`.
+- Updated wrapper classes to accept `cluster_name` in `__init__`.
+- Backward compatibility with single cluster config.
+
+### Phase 6: Other Integration Considerations
 
 - Ceph API/integration (cluster ceph support/endpoints).
 - Notes → docs.
-- Consider handling for multiple Proxmox clusters (e.g., configuration profiles, dynamic cluster selection via env vars or CLI flags).
 
 ## Implementation Notes
 
