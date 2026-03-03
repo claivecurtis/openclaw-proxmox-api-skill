@@ -107,9 +107,8 @@ class ProxmoxConfig(BaseModel):
 class PBSConfig(BaseModel):
     name: str
     endpoint: str
-    user: Optional[str] = None
-    token_id: str
-    token_secret: str
+    user: str  # user@realm
+    token: str  # token_id=secret
     verify_ssl: bool = True
     port: int = 8007
     direct_pbs: bool = True
@@ -2348,13 +2347,12 @@ class PBSClient(ProxmoxClient):
     Client for Proxmox Backup Server (PBS) API.
     Inherits from ProxmoxClient but uses port 8007.
     """
-    def __init__(self, user, token_id, token_secret, endpoint, verify_ssl=True, port=8007):
+    def __init__(self, user, token, endpoint, verify_ssl=True, port=8007):
         """
         Initialize the PBS API client.
 
-        :param user: PBS user (e.g., 'backup@pbs')
-        :param token_id: API token ID
-        :param token_secret: API token secret
+        :param user: PBS user with realm (e.g., 'backup@pbs')
+        :param token: API token in 'token_id=secret' format
         :param endpoint: PBS host or URL (e.g., 'pbs.example.com' or 'pbs.example.com:8008')
         :param verify_ssl: Whether to verify SSL certificates
         :param port: Port number (default 8007)
@@ -2375,11 +2373,8 @@ class PBSClient(ProxmoxClient):
         else:
             self.host = endpoint
             self.port = port
-        # Combine user, token_id and token_secret for full token
-        if user:
-            full_token = f"{user}!{token_id}={token_secret}"
-        else:
-            full_token = f"{token_id}={token_secret}"
+        # Combine user and token for full token
+        full_token = f"{user}!{token}"
         self.token = full_token
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
@@ -3445,7 +3440,9 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config = PBSConfig()
         config.name = pbs_config.get('name')
         config.endpoint = pbs_config.get('endpoint')
-        config.token = pbs_config.get('token')
+        config.user = pbs_config.get('user')
+        config.token_id = pbs_config.get('token_id')
+        config.token_secret = pbs_config.get('token_secret')
         config.verify_ssl = pbs_config.get('verify_ssl', True)
         config.direct_pbs = pbs_config.get('direct_pbs', True)
 
