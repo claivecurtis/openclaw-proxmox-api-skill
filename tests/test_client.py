@@ -336,7 +336,7 @@ class TestProxmoxClient:
         mock_response.json.return_value = {'data': 'version'}
         mock_session.get.return_value = mock_response
 
-        client = PBSClient('pbs.example.com', 'token123', True)
+        client = PBSClient('backup@pbs', 'token123', 'secret', 'pbs.example.com', True)
 
         assert client.host == 'pbs.example.com'
         mock_session.get.assert_called_with('https://pbs.example.com:8007/api2/json/version', params=None, verify=True, timeout=30)
@@ -355,7 +355,7 @@ class TestProxmoxClient:
         mock_response.raise_for_status.return_value = None
         mock_session.get.return_value = mock_response
 
-        client = PBSClient('pbs.example.com', 'token123', True)
+        client = PBSClient('backup@pbs', 'token123', 'secret', 'pbs.example.com', True)
         datastores = client.list_datastores()
 
         assert len(datastores) == 2
@@ -369,8 +369,8 @@ class TestProxmoxClient:
         mock_response.json.return_value = {'data': 'UPID:pbs:00000001:00000002:00000003:backup:'}
         mock_response.raise_for_status.return_value = None
         mock_session.post.return_value = mock_response
-
-        client = PBSClient('pbs.example.com', 'token123', True)
+    
+        client = PBSClient('backup@pbs', 'token123', 'secret', 'pbs.example.com', True)
         upid = client.backup_vm('store1', 101, 'node1')
 
         assert upid == 'UPID:pbs:00000001:00000002:00000003:backup:'
@@ -1083,7 +1083,7 @@ class TestProxmoxClient:
     @patch('client.requests.Session')
     def test_load_pbs_client_direct(self, mock_session_class, mock_load_config):
         mock_load_config.return_value = {
-            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken', 'direct_pbs': True}}],
+            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken=secret', 'direct_pbs': True}}],
             'pbs': None
         }
         mock_session = Mock()
@@ -1101,7 +1101,7 @@ class TestProxmoxClient:
     @patch('client.requests.Session')
     def test_load_pbs_client_proxy(self, mock_session_class, mock_load_config):
         mock_load_config.return_value = {
-            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken', 'direct_pbs': False}}],
+            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken=secret', 'direct_pbs': False}}],
             'pbs': None
         }
         mock_session = Mock()

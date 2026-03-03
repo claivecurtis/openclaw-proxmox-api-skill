@@ -108,7 +108,8 @@ class PBSConfig(BaseModel):
     name: str
     endpoint: str
     user: str  # user@realm
-    token: str  # token_id=secret
+    token_id: str
+    token_secret: str
     verify_ssl: bool = True
     port: int = 8007
     direct_pbs: bool = True
@@ -1814,6 +1815,16 @@ class ProxmoxClient:
                 raise
         raise TaskTimeoutError(f"Cluster task {upid} timed out after {timeout} seconds")
 
+    def version(self):
+        return self._get('/version')['data']
+
+    def pbs_version(self):
+        try:
+            pbs_client = load_pbs_client()
+            return pbs_client.version()
+        except Exception as e:
+            return f"No PBS configured or error: {e}"
+
     # Phase 3: Access Control
     def user_create(self, userid, config):
         """
@@ -2347,14 +2358,15 @@ class PBSClient(ProxmoxClient):
     Client for Proxmox Backup Server (PBS) API.
     Inherits from ProxmoxClient but uses port 8007.
     """
-    def __init__(self, user, token, endpoint, verify_ssl=True, port=8007):
+    def __init__(self, user, token_id, token_secret, endpoint, verify_ssl=True, port=8007):
         """
         Initialize the PBS API client.
 
         :param user: PBS user with realm (e.g., 'backup@pbs')
-        :param token: API token in 'token_id=secret' format
+        :param token_id: API token ID
+        :param token_secret: API token secret
         :param endpoint: PBS host or URL (e.g., 'pbs.example.com' or 'pbs.example.com:8008')
-        :param verify_ssl: Whether to verify SSL certificates
+        :param verify_ssl: Whether to verify SSL certificates (default True)
         :param port: Port number (default 8007)
         """
         # Parse endpoint
@@ -2374,7 +2386,7 @@ class PBSClient(ProxmoxClient):
             self.host = endpoint
             self.port = port
         # Combine user and token for full token
-        full_token = f"{user}!{token}"
+        full_token = f"{user}!{token_id}={token_secret}"
         self.token = full_token
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
@@ -2762,6 +2774,9 @@ class PBSProxyClient(ProxmoxClient):
         except ProxmoxAPIError as e:
             logger.error(f"Failed to sync datastore {datastore} via proxy: {e}")
             raise
+
+    def version(self):
+        return self._get('/version')['data']
 
 
 class VM:
@@ -3430,6 +3445,15 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
     if not pbs_config:
         raise ValueError("PBS config not found")
 
+    # Backward compatibility: if 'token' exists, parse it
+    if 'token' in pbs_config and not ('token_id' in pbs_config and 'token_secret' in pbs_config):
+        try:
+            token_id, token_secret = pbs_config['token'].split('=', 1)
+            pbs_config['token_id'] = token_id
+            pbs_config['token_secret'] = token_secret
+        except ValueError:
+            raise ValueError("Invalid token format in PBS config: expected 'token_id=secret'")
+
     # Validate
     if PYDANTIC_AVAILABLE:
         try:
@@ -3471,4 +3495,9 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
 
 if __name__ == '__main__':
     import sys
-    print(sys.argv)
+    for arg in sys.argv[1:]:
+        try:
+            result = eval(arg)
+            print(result)
+        except Exception as e:
+            print(f"Error evaluating {arg}: {e}")
