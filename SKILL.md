@@ -32,7 +32,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
 ### Auto-Update Policy
-On first load, `load_client()` automatically detects the cluster name from `/cluster/status` and updates `secrets/config.proxmox.yaml` if it mismatches the configured `clusters[0].name`. The old config is backed up to `config.proxmox.yaml.backup`. For PBS, datastore names are logged for reference. This ensures parity between config and live environment on runtime detection.
+On first load, `load_client()` automatically detects the cluster name from `/cluster/status` and updates `secrets/config.proxmox.yaml` if it mismatches the configured `clusters[0].name`. The old config is backed up to `config.proxmox.yaml.backup`. For PBS, names are verified against `/api2/json/version` server_name for parity. This ensures parity between config and live environment on runtime detection.
 
 #### Multi-Cluster Support
 - Configure multiple clusters in `secrets/config.proxmox.yaml` under `clusters` list.
@@ -81,10 +81,7 @@ On first load, `load_client()` automatically detects the cluster name from `/clu
   - Backup to local storage: `vm_backup('node1', 100, 'local')`
   - Backup to PBS: `vm_backup('node1', 100, 'pbs-datastore', mode='stop')`
 
-#### PBS Datastore Operations
-- **Script:** `scripts/client.py` `load_pbs_client().list_datastores()`
-- **Description:** Lists datastores configured on the PBS server.
-- **Output:** List of datastore dictionaries.
+
 
 #### PBS Backup Jobs
 - **Script:** `scripts/client.py` `load_pbs_client().backup_vm(datastore, vmid, node, backup_type='vm')`
