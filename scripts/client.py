@@ -3125,7 +3125,65 @@ def load_client(cluster_name=None):
         except FileNotFoundError:
             raise ValueError("Token not found in config or pve-token.txt")
 
-    return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
+    client = ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
+
+    # Verify and update cluster config names for all clusters
+    verify_cluster_config(raw_config, clusters)
+
+    # Detect PBS datastores if PBS configured
+    if 'pbs' in cluster_config:
+        try:
+            pbs_client = load_pbs_client(cluster_name=cluster_config.get('name'))
+            datastores = pbs_client.list_datastores()
+            datastore_names = [ds.get('id') for ds in datastores if 'id' in ds]
+            logger.info(f"PBS datastores: {datastore_names}")
+            # If no datastores in config, perhaps add default or log
+            # For now, just log as per task "PBS /pbs/datastore list names?"
+        except Exception as e:
+            logger.warning(f"Failed to list PBS datastores: {e}")
+
+    return client
+
+def verify_cluster_config(raw_config, clusters):
+    # Loop all clusters, update name to API name if mismatch
+    updated = False
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    backup_path = config_path + '.backup'
+    import shutil
+    # Backup once if any update
+    backed_up = False
+    for cluster in clusters:
+        try:
+            # Get token for this cluster
+            token = cluster.get('token')
+            if token is None:
+                # Fallback to old txt file (deprecated)
+                token_path = os.path.join(skill_dir, 'secrets', 'pve-token.txt')
+                try:
+                    with open(token_path, 'r') as f:
+                        token = f.read().strip()
+                except FileNotFoundError:
+                    logger.warning(f"Token not found for cluster {cluster.get('name')}, skipping name update")
+                    continue
+            # Create temp client
+            temp_client = ProxmoxClient(cluster['host'], token, cluster.get('verify_ssl', True), cluster.get('timeout', 30), False)
+            cluster_status = temp_client.cluster_status()
+            api_cluster_name = cluster_status['data'].get('name')
+            if api_cluster_name is not None and api_cluster_name != cluster.get('name'):
+                if not backed_up:
+                    shutil.copy2(config_path, backup_path)
+                    logger.info(f"Config backed up to {backup_path}")
+                    backed_up = True
+                logger.info(f"Cluster name mismatch for '{cluster.get('name')}': config vs API '{api_cluster_name}'. Updating config.")
+                cluster['name'] = api_cluster_name
+                updated = True
+        except Exception as e:
+            logger.warning(f"Failed to verify/update cluster name for {cluster.get('name')}: {e}")
+    if updated:
+        with open(config_path, 'w') as f:
+            yaml.dump(raw_config, f, default_flow_style=False)
+        logger.info("Config updated with new cluster names.")
 
 # Utility function to load PBS client from config
 def load_pbs_client(cluster_name=None, pbs_name=None):
@@ -3163,3 +3221,7 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config.verify_ssl = pbs_config.get('verify_ssl', True)
 
     return PBSClient(config.endpoint, config.token, config.verify_ssl)
+
+if __name__ == '__main__':
+    import sys
+    print(sys.argv)
