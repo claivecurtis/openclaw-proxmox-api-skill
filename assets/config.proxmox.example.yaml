@@ -13,6 +13,7 @@ clusters:
       port: 8007  # PBS port
       token: your-pbs-token-here  # PBS API token
       verify_ssl: false  # Self-signed
+      direct_pbs: true  # true for direct connection to PBS, false for proxy via PVE
   # Add more clusters as needed
   # - name: cluster2
   #   host: ...
@@ -24,6 +25,7 @@ pbs:  # Global PBS configs (optional, if not per-cluster)
     port: 8007
     token: your-global-pbs-token
     verify_ssl: false
+    direct_pbs: true  # true for direct connection to PBS, false for proxy via PVE
 
 snapshots:
   naming_convention: "aiagent-snap-{number:04d}"  # Template for auto-generated names

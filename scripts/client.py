@@ -110,6 +110,7 @@ class PBSConfig(BaseModel):
     token: str
     verify_ssl: bool = True
     port: int = 8007
+    direct_pbs: bool = True
 
 class ProxmoxAuthError(Exception):
     pass
@@ -2610,6 +2611,155 @@ class PBSClient(ProxmoxClient):
             raise
 
 
+class PBSProxyClient(ProxmoxClient):
+    """
+    PBS client that proxies through PVE's /pbs endpoints.
+    Uses the PVE API token and host.
+    """
+    def __init__(self, pve_host, pve_token, pbs_name, verify_ssl=True, timeout=30):
+        # Initialize as PVE client, but we'll use /pbs paths
+        super().__init__(pve_host, pve_token, verify_ssl, timeout, port=8006)
+        self.pbs_name = pbs_name
+
+    def list_datastores(self):
+        """
+        List datastores on the PBS server via proxy.
+
+        :return: List of datastore dictionaries
+        """
+        try:
+            datastores = self._get('/pbs')
+            logger.info(f"Retrieved {len(datastores['data'])} datastores via proxy")
+            return datastores['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list datastores via proxy: {e}")
+            raise
+
+    def backup_vm(self, datastore, vmid, node, backup_type='vm', **kwargs):
+        """
+        Initiate a backup of a VM to PBS via proxy.
+
+        :param datastore: PBS datastore
+        :param vmid: VM ID
+        :param node: Node name
+        :param backup_type: Backup type ('vm', 'ct')
+        :param kwargs: Additional parameters
+        :return: UPID of the backup task
+        """
+        path = f'/pbs/{self.pbs_name}/datastore/{datastore}/backup'
+        data = {
+            'id': f'{node}/{vmid}',
+            'type': backup_type,
+            **kwargs
+        }
+        try:
+            result = self._post(path, data)
+            upid = result['data']
+            logger.info(f"Backup of {backup_type} {vmid} to datastore {datastore} via proxy initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to backup {backup_type} {vmid} via proxy: {e}")
+            raise
+
+    def create_datastore(self, name, config):
+        """
+        Create a new datastore on PBS via proxy.
+
+        :param name: Datastore name
+        :param config: Datastore configuration dict
+        :return: None
+        """
+        path = f'/pbs/{self.pbs_name}/datastore/{name}'
+        try:
+            self._post(path, config)
+            logger.info(f"Datastore {name} created via proxy")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to create datastore {name} via proxy: {e}")
+            raise
+
+    def list_backups(self, datastore):
+        """
+        List backups in a datastore via proxy.
+
+        :param datastore: Datastore name
+        :return: List of backup dictionaries
+        """
+        try:
+            backups = self._get(f'/pbs/{self.pbs_name}/datastore/{datastore}')
+            logger.info(f"Retrieved {len(backups['data'])} backups from {datastore} via proxy")
+            return backups['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list backups in {datastore} via proxy: {e}")
+            raise
+
+    def restore_backup(self, datastore, backup_id, target):
+        """
+        Restore a backup from PBS via proxy.
+
+        :param datastore: Datastore name
+        :param backup_id: Backup ID
+        :param target: Restore target config
+        :return: UPID of the restore task
+        """
+        path = f'/pbs/{self.pbs_name}/datastore/{datastore}/restore/{backup_id}'
+        try:
+            result = self._post(path, target)
+            upid = result['data']
+            logger.info(f"Restore of backup {backup_id} from {datastore} via proxy initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to restore backup {backup_id} via proxy: {e}")
+            raise
+
+    def delete_backup(self, datastore, backup_id):
+        """
+        Delete a backup from PBS via proxy.
+
+        :param datastore: Datastore name
+        :param backup_id: Backup ID
+        :return: None
+        """
+        path = f'/pbs/{self.pbs_name}/datastore/{datastore}/backup/{backup_id}'
+        try:
+            self._delete(path)
+            logger.info(f"Backup {backup_id} deleted from {datastore} via proxy")
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to delete backup {backup_id} via proxy: {e}")
+            raise
+
+    def list_tasks(self):
+        """
+        List PBS tasks via proxy.
+
+        :return: List of task dictionaries
+        """
+        try:
+            tasks = self._get(f'/pbs/{self.pbs_name}/tasks')
+            logger.info(f"Retrieved {len(tasks['data'])} tasks via proxy")
+            return tasks['data']
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to list tasks via proxy: {e}")
+            raise
+
+    def sync_datastore(self, datastore, remote):
+        """
+        Sync datastore with remote via proxy.
+
+        :param datastore: Datastore name
+        :param remote: Remote config
+        :return: UPID of the sync task
+        """
+        path = f'/pbs/{self.pbs_name}/datastore/{datastore}/sync'
+        try:
+            result = self._post(path, remote)
+            upid = result['data']
+            logger.info(f"Sync of datastore {datastore} via proxy initiated, UPID: {upid}")
+            return upid
+        except ProxmoxAPIError as e:
+            logger.error(f"Failed to sync datastore {datastore} via proxy: {e}")
+            raise
+
+
 class VM:
     """
     Wrapper class for VM operations.
@@ -3236,7 +3386,8 @@ def verify_cluster_config(raw_config, clusters):
             # Create temp client
             temp_client = ProxmoxClient(cluster['host'], token, cluster.get('verify_ssl', True), cluster.get('timeout', 30), False, port=cluster.get('port', 8006))
             cluster_status = temp_client.cluster_status()
-            api_cluster_name = cluster_status['data'].get('name')
+            cluster_item = next((item for item in cluster_status['data'] if item['type'] == 'cluster'), None)
+            api_cluster_name = cluster_item['name'] if cluster_item else None
             if api_cluster_name is not None and api_cluster_name != cluster.get('name'):
                 if not backed_up:
                     shutil.copy2(config_path, backup_path)
@@ -3260,6 +3411,7 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
 
     # Find PBS config
     pbs_config = None
+    cluster_config = None
     if cluster_name:
         cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
         if cluster_config and 'pbs' in cluster_config:
@@ -3286,8 +3438,30 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config.endpoint = pbs_config.get('endpoint')
         config.token = pbs_config.get('token')
         config.verify_ssl = pbs_config.get('verify_ssl', True)
+        config.direct_pbs = pbs_config.get('direct_pbs', True)
 
-    return PBSClient(config.endpoint, config.token, config.verify_ssl)
+    if config.direct_pbs:
+        return PBSClient(config.endpoint, config.token, config.verify_ssl)
+    else:
+        # Proxy mode: use PVE client
+        if not cluster_config:
+            # For global PBS proxy, need a cluster config
+            if clusters:
+                cluster_config = clusters[0]
+            else:
+                raise ValueError("No cluster config found for PBS proxy mode")
+        if PYDANTIC_AVAILABLE:
+            try:
+                pve_config = ProxmoxConfig(**cluster_config)
+            except ValidationError as e:
+                raise ValueError(f"Invalid cluster config: {e}")
+        else:
+            pve_config = ProxmoxConfig()
+            pve_config.name = cluster_config.get('name')
+            pve_config.host = cluster_config.get('host')
+            pve_config.token = cluster_config.get('token')
+            pve_config.verify_ssl = cluster_config.get('verify_ssl', True)
+        return PBSProxyClient(pve_config.host, pve_config.token, config.name, pve_config.verify_ssl)
 
 if __name__ == '__main__':
     import sys
