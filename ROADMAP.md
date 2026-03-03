@@ -199,6 +199,7 @@ All methods will wrap the REST API endpoints, handling authentication (tickets/t
 - PBS client factory: `load_pbs_client(cluster_name, pbs_name)`.
 - Updated wrapper classes to accept `cluster_name` in `__init__`.
 - Backward compatibility with single cluster config.
+- Auto-update cluster and PBS names on load: Detects live cluster/PBS names from API and updates config if mismatch, with backup.
 
 ### Phase 6: Other Integration Considerations
 

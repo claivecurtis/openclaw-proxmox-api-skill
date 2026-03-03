@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PBS backup API support (PR #27)
 - AI execution reminder (PR #26)
 - Live Verify policy to prevent stale memory reports (PR #25)
+- Auto-update cluster and PBS names on client load (PR #30)
 
 ### Fixed
 - Generic host in example.yaml (PR #23)
