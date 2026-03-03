@@ -96,6 +96,16 @@ On first load, `load_client()` automatically detects the cluster name from `/clu
 - **Examples:**
   - Restore VM: `load_pbs_client().restore_backup('datastore1', 'backup-123', {'vmid': 101, 'node': 'node1'})`
 
+#### Direct PBS Client Creation
+- **Script:** `scripts/client.py` `PBSClient(user, token_id, token_secret, endpoint, verify_ssl=True, port=8007)`
+- **Description:** Creates a direct PBS client instance for custom operations.
+- **Example:**
+  ```python
+  from scripts.client import PBSClient
+  pbs = PBSClient(user='backup@pbs', token_id='my-token', token_secret='secret-value', endpoint='pbs.example.com', verify_ssl=True, port=8007)
+  datastores = pbs.list_datastores()
+  ```
+
 ### Error Handling
 - `ProxmoxAuthError`: Authentication issues (check token/config)
 - `ProxmoxAPIError`: API errors (permissions, invalid params)
