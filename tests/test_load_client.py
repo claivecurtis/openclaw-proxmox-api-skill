@@ -6,7 +6,7 @@ import os
 # Add scripts directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from client import load_client
+from client import load_client, load_pbs_client
 
 class TestLoadClient:
 
@@ -60,3 +60,27 @@ class TestLoadClient:
         assert args[0] == 'pve.example.com'
         assert args[1] == 'token456'
         assert args[2] == False
+
+
+class TestLoadPBSClient:
+
+    @patch('client.PBSClient')
+    @patch('client.load_config')
+    def test_load_pbs_client_with_token(self, mock_load_config, mock_pbs_client):
+        mock_load_config.return_value = {
+            'pbs': [{
+                'name': 'test-pbs',
+                'endpoint': 'pbs.example.com',
+                'user': 'backup@pbs',
+                'token_id': 'test-token',
+                'token_secret': 'secret',
+                'verify_ssl': True
+            }]
+        }
+        client = load_pbs_client(pbs_name='test-pbs')
+        assert mock_pbs_client.called
+        args = mock_pbs_client.call_args[0]
+        assert args[0] == 'backup@pbs'
+        assert args[1] == 'test-token'
+        assert args[2] == 'secret'
+        assert args[3] == 'pbs.example.com'

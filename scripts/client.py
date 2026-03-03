@@ -77,20 +77,20 @@ STORAGE_REGEX = re.compile(r'^[a-zA-Z0-9_-]+$')  # storage names: alphanumeric, 
 def validate_vmid(vmid):
     """Validate VMID: must be digits, >0"""
     if not VMID_REGEX.match(str(vmid)):
-        raise ValueError(f"Invalid VMID '{vmid}': must be a positive integer")
+        raise ProxmoxAPIError(f"Invalid VMID '{vmid}': must be a positive integer")
     vmid_int = int(vmid)
     if vmid_int <= 0:
-        raise ValueError(f"Invalid VMID '{vmid}': must be > 0")
+        raise ProxmoxAPIError(f"Invalid VMID '{vmid}': must be > 0")
 
 def validate_node(node):
     """Validate node name"""
     if not NODE_REGEX.match(node):
-        raise ValueError(f"Invalid node name '{node}': must contain only letters, numbers, hyphens, underscores")
+        raise ProxmoxAPIError(f"Invalid node name '{node}': must contain only letters, numbers, hyphens, underscores")
 
 def validate_storage(storage):
     """Validate storage name"""
     if not STORAGE_REGEX.match(storage):
-        raise ValueError(f"Invalid storage name '{storage}': must contain only letters, numbers, hyphens, underscores")
+        raise ProxmoxAPIError(f"Invalid storage name '{storage}': must contain only letters, numbers, hyphens, underscores")
 
 # Config validation
 class ProxmoxConfig(BaseModel):
@@ -2387,7 +2387,6 @@ class PBSClient(ProxmoxClient):
             self.port = port
         # Combine user and token for full token
         full_token = f"{user}!{token_id}={token_secret}"
-        self.token = full_token
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
         self.session.headers.update({
@@ -3289,14 +3288,14 @@ def load_client(cluster_name=None):
     else:
         cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
         if cluster_config is None:
-            raise ValueError(f"Cluster '{cluster_name}' not found")
+            raise ProxmoxAPIError(f"Cluster '{cluster_name}' not found")
 
     # Validate
     if PYDANTIC_AVAILABLE:
         try:
             config = ProxmoxConfig(**cluster_config)
         except ValidationError as e:
-            raise ValueError(f"Invalid cluster config: {e}")
+            raise ProxmoxAPIError(f"Invalid cluster config: {e}")
     else:
         config = ProxmoxConfig()
         config.name = cluster_config.get('name')
@@ -3314,7 +3313,7 @@ def load_client(cluster_name=None):
             with open(token_path, 'r') as f:
                 token = f.read().strip()
         except FileNotFoundError:
-            raise ValueError("Token not found in config or pve-token.txt")
+            raise ProxmoxAPIError("Token not found in config or pve-token.txt")
 
     client = ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll, port=config.port)
 
@@ -3324,7 +3323,7 @@ def load_client(cluster_name=None):
             clusters = [raw_config['proxmox']]
             clusters[0]['name'] = 'default'
         else:
-            raise ValueError("No clusters configured")
+            raise ProxmoxAPIError("No clusters configured")
 
     # Find cluster
     if cluster_name is None:
@@ -3333,14 +3332,14 @@ def load_client(cluster_name=None):
     else:
         cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
         if cluster_config is None:
-            raise ValueError(f"Cluster '{cluster_name}' not found")
+            raise ProxmoxAPIError(f"Cluster '{cluster_name}' not found")
 
     # Validate
     if PYDANTIC_AVAILABLE:
         try:
             config = ProxmoxConfig(**cluster_config)
         except ValidationError as e:
-            raise ValueError(f"Invalid cluster config: {e}")
+            raise ProxmoxAPIError(f"Invalid cluster config: {e}")
     else:
         config = ProxmoxConfig()
         config.name = cluster_config.get('name')
@@ -3358,7 +3357,7 @@ def load_client(cluster_name=None):
             with open(token_path, 'r') as f:
                 token = f.read().strip()
         except FileNotFoundError:
-            raise ValueError("Token not found in config or pve-token.txt")
+            raise ProxmoxAPIError("Token not found in config or pve-token.txt")
 
     client = ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll, port=config.port)
 
@@ -3443,7 +3442,7 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
             pbs_config = global_pbs[0] if global_pbs else None
 
     if not pbs_config:
-        raise ValueError("PBS config not found")
+        raise ProxmoxAPIError("PBS config not found")
 
     # Backward compatibility: if 'token' exists, parse it
     if 'token' in pbs_config and not ('token_id' in pbs_config and 'token_secret' in pbs_config):
@@ -3452,14 +3451,14 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
             pbs_config['token_id'] = token_id
             pbs_config['token_secret'] = token_secret
         except ValueError:
-            raise ValueError("Invalid token format in PBS config: expected 'token_id=secret'")
+            raise ProxmoxAPIError("Invalid token format in PBS config: expected 'token_id=secret'")
 
     # Validate
     if PYDANTIC_AVAILABLE:
         try:
             config = PBSConfig(**pbs_config)
         except ValidationError as e:
-            raise ValueError(f"Invalid PBS config: {e}")
+            raise ProxmoxAPIError(f"Invalid PBS config: {e}")
     else:
         config = PBSConfig()
         config.name = pbs_config.get('name')
@@ -3479,12 +3478,12 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
             if clusters:
                 cluster_config = clusters[0]
             else:
-                raise ValueError("No cluster config found for PBS proxy mode")
+                raise ProxmoxAPIError("No cluster config found for PBS proxy mode")
         if PYDANTIC_AVAILABLE:
             try:
                 pve_config = ProxmoxConfig(**cluster_config)
             except ValidationError as e:
-                raise ValueError(f"Invalid cluster config: {e}")
+                raise ProxmoxAPIError(f"Invalid cluster config: {e}")
         else:
             pve_config = ProxmoxConfig()
             pve_config.name = cluster_config.get('name')
@@ -3493,11 +3492,3 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
             pve_config.verify_ssl = cluster_config.get('verify_ssl', True)
         return PBSProxyClient(pve_config.host, pve_config.token, config.name, pve_config.verify_ssl)
 
-if __name__ == '__main__':
-    import sys
-    for arg in sys.argv[1:]:
-        try:
-            result = eval(arg)
-            print(result)
-        except Exception as e:
-            print(f"Error evaluating {arg}: {e}")
