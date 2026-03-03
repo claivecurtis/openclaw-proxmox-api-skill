@@ -6,7 +6,7 @@ import os
 # Add scripts directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from client import ProxmoxClient, PBSClient, ProxmoxAuthError, ProxmoxAPIError, TaskTimeoutError, VM, Storage, Pool, poll_task_until_complete
+from client import ProxmoxClient, PBSClient, PBSProxyClient, ProxmoxAuthError, ProxmoxAPIError, TaskTimeoutError, VM, Storage, Pool, poll_task_until_complete, load_pbs_client
 
 class TestProxmoxClient:
 
@@ -1036,3 +1036,82 @@ class TestProxmoxClient:
 
         assert dns == {'search': 'example.com'}
         mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/nodes/node1/dns', params=None, verify=True, timeout=30)
+
+    @patch('client.requests.Session')
+    def test_pbs_proxy_list_datastores(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'data': [
+                {'id': 'store1'},
+                {'id': 'store2'}
+            ]
+        }
+        mock_response.raise_for_status.return_value = None
+        mock_session.get.side_effect = [mock_response_version, mock_response]
+
+        client = PBSProxyClient('pve.example.com', 'token123', 'pbs1', True)
+        datastores = client.list_datastores()
+
+        assert len(datastores) == 2
+        assert datastores[0]['id'] == 'store1'
+
+    @patch('client.requests.Session')
+    def test_pbs_proxy_backup_vm(self, mock_session_class):
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'UPID:pbs:00000001:00000002:00000003:backup:'}
+        mock_response.raise_for_status.return_value = None
+        mock_session.post.return_value = mock_response
+        mock_session.get.return_value = mock_response_version
+
+        client = PBSProxyClient('pve.example.com', 'token123', 'pbs1', True)
+        upid = client.backup_vm('store1', 101, 'node1')
+
+        assert upid == 'UPID:pbs:00000001:00000002:00000003:backup:'
+        mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/pbs/pbs1/datastore/store1/backup', json={'id': 'node1/101', 'type': 'vm'}, verify=True, timeout=30)
+
+    @patch('client.load_config')
+    @patch('client.requests.Session')
+    def test_load_pbs_client_direct(self, mock_session_class, mock_load_config):
+        mock_load_config.return_value = {
+            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken', 'direct_pbs': True}}],
+            'pbs': None
+        }
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response = Mock()
+        mock_response.json.return_value = {'data': 'version'}
+        mock_session.get.return_value = mock_response
+
+        client = load_pbs_client('cluster1')
+
+        assert isinstance(client, PBSClient)
+        mock_session.get.assert_called_with('https://pbs.example.com:8007/api2/json/version', params=None, verify=True, timeout=30)
+
+    @patch('client.load_config')
+    @patch('client.requests.Session')
+    def test_load_pbs_client_proxy(self, mock_session_class, mock_load_config):
+        mock_load_config.return_value = {
+            'clusters': [{'name': 'cluster1', 'host': 'pve.example.com', 'token': 'token123', 'pbs': {'name': 'pbs1', 'endpoint': 'pbs.example.com', 'token': 'pbstoken', 'direct_pbs': False}}],
+            'pbs': None
+        }
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+        mock_response_version = Mock()
+        mock_response_version.json.return_value = {'version': '1.0'}
+        mock_response_version.raise_for_status.return_value = None
+        mock_session.get.return_value = mock_response_version
+
+        client = load_pbs_client('cluster1')
+
+        assert isinstance(client, PBSProxyClient)
+        mock_session.get.assert_called_with('https://pve.example.com:8006/api2/json/version', params=None, verify=True, timeout=30)

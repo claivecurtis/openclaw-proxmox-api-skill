@@ -28,7 +28,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    [ ! -f skill/secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml
    ```
 
-   Edit `secrets/config.proxmox.yaml` with your clusters list, each with name, host, token. For PBS, configure per-cluster or global `pbs` sections.
+   Edit `secrets/config.proxmox.yaml` with your clusters list, each with name, host, token. For PBS, configure per-cluster or global `pbs` sections with `direct_pbs` (default: true) set to true for direct connection or false for proxy via PVE.
 3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
 ### Auto-Update Policy
@@ -85,14 +85,14 @@ On first load, `load_client()` automatically detects the cluster name from `/clu
 
 #### PBS Backup Jobs
 - **Script:** `scripts/client.py` `load_pbs_client().backup_vm(datastore, vmid, node, backup_type='vm')`
-- **Description:** Initiates a backup job on PBS for the specified VM or container.
+- **Description:** Initiates a backup job on PBS for the specified VM or container. Uses direct connection if `direct_pbs: true`, else proxies via PVE.
 - **Examples:**
   - Backup VM: `load_pbs_client().backup_vm('datastore1', 100, 'node1')`
   - Backup CT: `load_pbs_client().backup_vm('datastore1', 200, 'node1', backup_type='ct')`
 
 #### PBS Restore
 - **Script:** `scripts/client.py` `load_pbs_client().restore_backup(datastore, backup_id, target)`
-- **Description:** Restores a backup from PBS to the specified target.
+- **Description:** Restores a backup from PBS to the specified target. Uses direct connection if `direct_pbs: true`, else proxies via PVE.
 - **Examples:**
   - Restore VM: `load_pbs_client().restore_backup('datastore1', 'backup-123', {'vmid': 101, 'node': 'node1'})`
 
