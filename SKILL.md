@@ -25,7 +25,7 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
 2. Run setup exec (idempotent):
 
    ```bash
-   [ ! -f skill/secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml skill/secrets/config.proxmox.yaml
+   [ ! -f secrets/config.proxmox.yaml ] && cp assets/config.proxmox.example.yaml secrets/config.proxmox.yaml
    ```
 
    Edit `secrets/config.proxmox.yaml` with your clusters list, each with name, host, token. For PBS, configure per-cluster or global `pbs` sections with `direct_pbs` (default: true) set to true for direct connection or false for proxy via PVE.
