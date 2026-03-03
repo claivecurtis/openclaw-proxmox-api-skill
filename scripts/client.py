@@ -107,7 +107,9 @@ class ProxmoxConfig(BaseModel):
 class PBSConfig(BaseModel):
     name: str
     endpoint: str
-    token: str
+    user: Optional[str] = None
+    token_id: str
+    token_secret: str
     verify_ssl: bool = True
     port: int = 8007
     direct_pbs: bool = True
@@ -2346,12 +2348,14 @@ class PBSClient(ProxmoxClient):
     Client for Proxmox Backup Server (PBS) API.
     Inherits from ProxmoxClient but uses port 8007.
     """
-    def __init__(self, endpoint, token, verify_ssl=True, port=8007):
+    def __init__(self, user, token_id, token_secret, endpoint, verify_ssl=True, port=8007):
         """
         Initialize the PBS API client.
 
+        :param user: PBS user (e.g., 'backup@pbs')
+        :param token_id: API token ID
+        :param token_secret: API token secret
         :param endpoint: PBS host or URL (e.g., 'pbs.example.com' or 'pbs.example.com:8008')
-        :param token: API token
         :param verify_ssl: Whether to verify SSL certificates
         :param port: Port number (default 8007)
         """
@@ -2371,11 +2375,16 @@ class PBSClient(ProxmoxClient):
         else:
             self.host = endpoint
             self.port = port
-        self.token = token
+        # Combine user, token_id and token_secret for full token
+        if user:
+            full_token = f"{user}!{token_id}={token_secret}"
+        else:
+            full_token = f"{token_id}={token_secret}"
+        self.token = full_token
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'PVEAPIToken={token}',
+            'Authorization': f'PVEAPIToken={full_token}',
             'Content-Type': 'application/json'
         })
         # Test authentication
@@ -3349,7 +3358,7 @@ def load_client(cluster_name=None):
         pbs_items = pbs_list if isinstance(pbs_list, list) else [pbs_list]
         for pbs in pbs_items:
             try:
-                pbs_client = PBSClient(pbs['endpoint'], pbs['token'], pbs.get('verify_ssl', True), port=pbs.get('port', 8007))
+                pbs_client = PBSClient(pbs.get('user'), pbs['token_id'], pbs['token_secret'], pbs['endpoint'], pbs.get('verify_ssl', True), port=pbs.get('port', 8007))
                 version = pbs_client._get('/version')
                 api_name = version['data'].get('server_name')
                 if api_name is not None and api_name != pbs.get('name'):
@@ -3441,7 +3450,7 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config.direct_pbs = pbs_config.get('direct_pbs', True)
 
     if config.direct_pbs:
-        return PBSClient(config.endpoint, config.token, config.verify_ssl)
+        return PBSClient(config.user, config.token_id, config.token_secret, config.endpoint, config.verify_ssl)
     else:
         # Proxy mode: use PVE client
         if not cluster_config:
