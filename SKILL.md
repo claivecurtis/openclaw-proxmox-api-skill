@@ -31,6 +31,9 @@ Load the skill by reading this file and the scripts/client.py. The main interfac
    Edit `secrets/config.proxmox.yaml` with your clusters list, each with name, host, token. For PBS, configure per-cluster or global `pbs` sections.
 3. Snapshot naming conventions are configured in `secrets/config.proxmox.yaml` under the `snapshots` section.
 
+### Auto-Update Policy
+On first load, `load_client()` automatically detects the cluster name from `/cluster/status` and updates `secrets/config.proxmox.yaml` if it mismatches the configured `clusters[0].name`. The old config is backed up to `config.proxmox.yaml.backup`. For PBS, datastore names are logged for reference. This ensures parity between config and live environment on runtime detection.
+
 #### Multi-Cluster Support
 - Configure multiple clusters in `secrets/config.proxmox.yaml` under `clusters` list.
 - Select a cluster by passing `cluster=NAME` to operations (e.g., `vm_action(node, vmid, action, cluster='cluster1')`).
