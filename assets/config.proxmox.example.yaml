@@ -11,7 +11,9 @@ clusters:
       name: pbs-default
       endpoint: pbs.example.com  # PBS host
       port: 8007  # PBS port
-      token: your-pbs-token-here  # PBS API token
+      user: 'your-pbs-user@realm'  # PBS user (e.g., 'backup@pbs')
+      token_id: your-pbs-token-id  # PBS token ID
+      token_secret: your-pbs-token-secret  # PBS token secret
       verify_ssl: false  # Self-signed
       direct_pbs: true  # true for direct connection to PBS, false for proxy via PVE
   # Add more clusters as needed
@@ -23,7 +25,9 @@ pbs:  # Global PBS configs (optional, if not per-cluster)
   - name: global-pbs
     endpoint: pbs-global.example.com
     port: 8007
-    token: your-global-pbs-token
+    user: 'your-pbs-user@realm'  # PBS user (e.g., 'backup@pbs')
+    token_id: your-global-pbs-token-id
+    token_secret: your-global-pbs-token-secret
     verify_ssl: false
     direct_pbs: true  # true for direct connection to PBS, false for proxy via PVE
 
