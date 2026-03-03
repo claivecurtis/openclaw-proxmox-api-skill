@@ -3084,6 +3084,8 @@ def load_config():
 def load_client(cluster_name=None):
     raw_config = load_config()
     clusters = raw_config.get('clusters', [])
+    if cluster_name is None:
+        verify_cluster_config()
     if not clusters:
         # Fallback to old single config
         if 'proxmox' in raw_config:
@@ -3199,6 +3201,17 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config.verify_ssl = pbs_config.get('verify_ssl', True)
 
     return PBSClient(config.endpoint, config.token, config.verify_ssl)
+
+def verify_cluster_config():
+    raw_config = load_config()
+    clusters = raw_config.get('clusters', [])
+    for cluster in clusters:
+        name = cluster.get('name')
+        if name:
+            try:
+                load_client(name)
+            except Exception as e:
+                logger.warning(f"Failed to verify cluster {name}: {e}")
 
 if __name__ == '__main__':
     import sys
