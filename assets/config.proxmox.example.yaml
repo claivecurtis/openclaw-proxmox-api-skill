@@ -10,6 +10,7 @@ clusters:
     pbs:  # Optional per-cluster PBS
       name: pbs-default
       endpoint: pbs.example.com  # PBS host
+      port: 8007  # PBS port
       token: your-pbs-token-here  # PBS API token
       verify_ssl: false  # Self-signed
   # Add more clusters as needed
@@ -20,6 +21,7 @@ clusters:
 pbs:  # Global PBS configs (optional, if not per-cluster)
   - name: global-pbs
     endpoint: pbs-global.example.com
+    port: 8007
     token: your-global-pbs-token
     verify_ssl: false
 
