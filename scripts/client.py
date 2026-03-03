@@ -2998,7 +2998,7 @@ def load_config():
             'host': proxmox['host'],
             'port': proxmox.get('port', 8006),
             'user': proxmox.get('user'),
-            'token': proxmox['token'],
+            'token': proxmox.get('token'),
             'timeout': proxmox.get('timeout', 300),
             'verify_ssl': proxmox.get('verify_ssl', False),
             'auto_poll': proxmox.get('auto_poll', True),

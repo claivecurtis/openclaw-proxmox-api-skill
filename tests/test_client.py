@@ -564,7 +564,8 @@ class TestProxmoxClient:
         mock_session.post.assert_called_with('https://pve.example.com:8006/api2/json/pools/pool1', json={}, verify=True, timeout=30)
 
     @patch('client.requests.Session')
-    def test_vm_wrapper_list(self, mock_session_class):
+    @patch('client.load_client')
+    def test_vm_wrapper_list(self, mock_load_client, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
         mock_response = Mock()
@@ -573,13 +574,15 @@ class TestProxmoxClient:
         mock_session.get.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        vm = VM(client)
+        mock_load_client.return_value = client
+        vm = VM()
         vms = vm.list('node1')
 
         assert vms == [{'vmid': 101, 'name': 'vm1', 'node': 'node1'}]
 
     @patch('client.requests.Session')
-    def test_storage_wrapper_list(self, mock_session_class):
+    @patch('client.load_client')
+    def test_storage_wrapper_list(self, mock_load_client, mock_session_class):
         mock_session = Mock()
         mock_session_class.return_value = mock_session
         mock_response = Mock()
@@ -588,7 +591,8 @@ class TestProxmoxClient:
         mock_session.get.return_value = mock_response
 
         client = ProxmoxClient('pve.example.com', 'token123', True)
-        storage = Storage(client)
+        mock_load_client.return_value = client
+        storage = Storage()
         storages = storage.list()
 
         assert storages == [{'type': 'storage', 'id': 'local'}]
