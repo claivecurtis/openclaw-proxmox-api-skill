@@ -101,6 +101,7 @@ class ProxmoxConfig(BaseModel):
     verify_ssl: bool = True
     timeout: int = 30
     auto_poll: bool = True
+    port: int = 8006
     pbs: Optional[dict] = None
 
 class PBSConfig(BaseModel):
@@ -108,6 +109,7 @@ class PBSConfig(BaseModel):
     endpoint: str
     token: str
     verify_ssl: bool = True
+    port: int = 8007
 
 class ProxmoxAuthError(Exception):
     pass
@@ -119,7 +121,7 @@ class TaskTimeoutError(Exception):
     pass
 
 class ProxmoxClient:
-    def __init__(self, host, token, verify_ssl=True, timeout=30, auto_poll=True):
+    def __init__(self, host, token, verify_ssl=True, timeout=30, auto_poll=True, port=8006):
         """
         Initialize the Proxmox API client.
 
@@ -128,12 +130,14 @@ class ProxmoxClient:
         :param verify_ssl: Whether to verify SSL certificates
         :param timeout: Request timeout in seconds
         :param auto_poll: Default auto-polling for async tasks
+        :param port: Port number (default 8006)
         """
         self.host = host
         self.token = token
         self.verify_ssl = verify_ssl
         self.timeout = timeout
         self.auto_poll = auto_poll
+        self.port = port
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'PVEAPIToken={token}',
@@ -154,7 +158,7 @@ class ProxmoxClient:
         :param params: Optional query parameters
         :return: JSON response data
         """
-        url = f"https://{self.host}:8006/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
@@ -176,7 +180,7 @@ class ProxmoxClient:
         :param data: JSON data to send
         :return: JSON response data
         """
-        url = f"https://{self.host}:8006/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
@@ -197,7 +201,7 @@ class ProxmoxClient:
         :param path: API path
         :return: JSON response data
         """
-        url = f"https://{self.host}:8006/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.delete(url, verify=self.verify_ssl, timeout=self.timeout)
             resp.raise_for_status()
@@ -2341,15 +2345,31 @@ class PBSClient(ProxmoxClient):
     Client for Proxmox Backup Server (PBS) API.
     Inherits from ProxmoxClient but uses port 8007.
     """
-    def __init__(self, host, token, verify_ssl=True):
+    def __init__(self, endpoint, token, verify_ssl=True, port=8007):
         """
         Initialize the PBS API client.
 
-        :param host: PBS host (e.g., 'pbs.example.com')
+        :param endpoint: PBS host or URL (e.g., 'pbs.example.com' or 'pbs.example.com:8008')
         :param token: API token
         :param verify_ssl: Whether to verify SSL certificates
+        :param port: Port number (default 8007)
         """
-        self.host = host
+        # Parse endpoint
+        if '://' in endpoint:
+            from urllib.parse import urlparse
+            parsed = urlparse(endpoint)
+            self.host = parsed.hostname
+            self.port = parsed.port or port
+        elif ':' in endpoint:
+            self.host, port_str = endpoint.rsplit(':', 1)
+            try:
+                self.port = int(port_str)
+            except ValueError:
+                self.host = endpoint
+                self.port = port
+        else:
+            self.host = endpoint
+            self.port = port
         self.token = token
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
@@ -2372,7 +2392,7 @@ class PBSClient(ProxmoxClient):
         :param params: Optional query parameters
         :return: JSON response data
         """
-        url = f"https://{self.host}:8007/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.get(url, params=params, verify=self.verify_ssl, timeout=30)
             resp.raise_for_status()
@@ -2394,7 +2414,7 @@ class PBSClient(ProxmoxClient):
         :param data: JSON data to send
         :return: JSON response data
         """
-        url = f"https://{self.host}:8007/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.post(url, json=data, verify=self.verify_ssl, timeout=30)
             resp.raise_for_status()
@@ -2416,7 +2436,7 @@ class PBSClient(ProxmoxClient):
         :param data: JSON data to send
         :return: JSON response data
         """
-        url = f"https://{self.host}:8007/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.put(url, json=data, verify=self.verify_ssl, timeout=30)
             resp.raise_for_status()
@@ -2437,7 +2457,7 @@ class PBSClient(ProxmoxClient):
         :param path: API path
         :return: JSON response data or empty dict
         """
-        url = f"https://{self.host}:8007/api2/json{path}"
+        url = f"https://{self.host}:{self.port}/api2/json{path}"
         try:
             resp = self.session.delete(url, verify=self.verify_ssl, timeout=30)
             resp.raise_for_status()
@@ -3070,9 +3090,17 @@ def load_config():
             cluster.setdefault('timeout', 300)
             cluster.setdefault('verify_ssl', False)
             cluster.setdefault('auto_poll', True)
+            if 'pbs' in cluster:
+                pbs_config = cluster['pbs']
+                if isinstance(pbs_config, dict):
+                    pbs_config.setdefault('port', 8007)
+                elif isinstance(pbs_config, list):
+                    for pbs in pbs_config:
+                        pbs.setdefault('port', 8007)
     if 'pbs' in raw_config and isinstance(raw_config['pbs'], list):
         for pbs in raw_config['pbs']:
             pbs.setdefault('verify_ssl', False)
+            pbs.setdefault('port', 8007)
     if migrated:
         # Write back migrated config
         with open(config_path, 'w') as f:
@@ -3084,6 +3112,43 @@ def load_config():
 def load_client(cluster_name=None):
     raw_config = load_config()
     clusters = raw_config.get('clusters', [])
+    # Verify and update cluster config names for all clusters
+    verify_cluster_config(raw_config, clusters)
+    if cluster_name is None:
+        # Default to 'default' or first
+        cluster_config = next((c for c in clusters if c.get('name') == 'default'), clusters[0])
+    else:
+        cluster_config = next((c for c in clusters if c.get('name') == cluster_name), None)
+        if cluster_config is None:
+            raise ValueError(f"Cluster '{cluster_name}' not found")
+
+    # Validate
+    if PYDANTIC_AVAILABLE:
+        try:
+            config = ProxmoxConfig(**cluster_config)
+        except ValidationError as e:
+            raise ValueError(f"Invalid cluster config: {e}")
+    else:
+        config = ProxmoxConfig()
+        config.name = cluster_config.get('name')
+        config.host = cluster_config.get('host')
+        config.verify_ssl = cluster_config.get('verify_ssl', True)
+        config.timeout = cluster_config.get('timeout', 30)
+        config.auto_poll = cluster_config.get('auto_poll', True)
+        config.port = cluster_config.get('port', 8006)
+
+    token = cluster_config.get('token')
+    if token is None:
+        # Fallback to old txt file (deprecated)
+        token_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'secrets', 'pve-token.txt')
+        try:
+            with open(token_path, 'r') as f:
+                token = f.read().strip()
+        except FileNotFoundError:
+            raise ValueError("Token not found in config or pve-token.txt")
+
+    client = ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll, port=config.port)
+
     if not clusters:
         # Fallback to old single config
         if 'proxmox' in raw_config:
@@ -3114,6 +3179,7 @@ def load_client(cluster_name=None):
         config.verify_ssl = cluster_config.get('verify_ssl', True)
         config.timeout = cluster_config.get('timeout', 30)
         config.auto_poll = cluster_config.get('auto_poll', True)
+        config.port = cluster_config.get('port', 8006)
 
     token = cluster_config.get('token')
     if token is None:
@@ -3125,7 +3191,66 @@ def load_client(cluster_name=None):
         except FileNotFoundError:
             raise ValueError("Token not found in config or pve-token.txt")
 
-    return ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll)
+    client = ProxmoxClient(config.host, token, config.verify_ssl, config.timeout, config.auto_poll, port=config.port)
+
+    # Verify PBS names if PBS configured
+    if 'pbs' in cluster_config:
+        pbs_list = cluster_config['pbs']
+        pbs_items = pbs_list if isinstance(pbs_list, list) else [pbs_list]
+        for pbs in pbs_items:
+            try:
+                pbs_client = PBSClient(pbs['endpoint'], pbs['token'], pbs.get('verify_ssl', True), port=pbs.get('port', 8007))
+                version = pbs_client._get('/version')
+                api_name = version['data'].get('server_name')
+                if api_name is not None and api_name != pbs.get('name'):
+                    logger.info(f"PBS name mismatch for '{pbs.get('name')}': config vs API '{api_name}'.")
+                else:
+                    logger.info(f"PBS {pbs['name']}: name verified.")
+            except Exception as e:
+                logger.warning(f"Failed to verify PBS name for {pbs.get('name')}: {e}")
+
+    return client
+
+def verify_cluster_config(raw_config, clusters):
+    # Loop all clusters, update name to API name if mismatch
+    updated = False
+    skill_dir = os.path.dirname(os.path.dirname(__file__))
+    config_path = os.path.join(skill_dir, 'secrets', 'config.proxmox.yaml')
+    backup_path = config_path + '.backup'
+    import shutil
+    # Backup once if any update
+    backed_up = False
+    for cluster in clusters:
+        try:
+            # Get token for this cluster
+            token = cluster.get('token')
+            if token is None:
+                # Fallback to old txt file (deprecated)
+                token_path = os.path.join(skill_dir, 'secrets', 'pve-token.txt')
+                try:
+                    with open(token_path, 'r') as f:
+                        token = f.read().strip()
+                except FileNotFoundError:
+                    logger.warning(f"Token not found for cluster {cluster.get('name')}, skipping name update")
+                    continue
+            # Create temp client
+            temp_client = ProxmoxClient(cluster['host'], token, cluster.get('verify_ssl', True), cluster.get('timeout', 30), False, port=cluster.get('port', 8006))
+            cluster_status = temp_client.cluster_status()
+            api_cluster_name = cluster_status['data'].get('name')
+            if api_cluster_name is not None and api_cluster_name != cluster.get('name'):
+                if not backed_up:
+                    shutil.copy2(config_path, backup_path)
+                    logger.info(f"Config backed up to {backup_path}")
+                    backed_up = True
+                logger.info(f"Cluster name mismatch for '{cluster.get('name')}': config vs API '{api_cluster_name}'. Updating config.")
+                cluster['name'] = api_cluster_name
+                updated = True
+        except Exception as e:
+            logger.warning(f"Failed to verify/update cluster name for {cluster.get('name')}: {e}")
+    if updated:
+        with open(config_path, 'w') as f:
+            yaml.dump(raw_config, f, default_flow_style=False)
+        logger.info("Config updated with new cluster names.")
 
 # Utility function to load PBS client from config
 def load_pbs_client(cluster_name=None, pbs_name=None):
@@ -3163,3 +3288,7 @@ def load_pbs_client(cluster_name=None, pbs_name=None):
         config.verify_ssl = pbs_config.get('verify_ssl', True)
 
     return PBSClient(config.endpoint, config.token, config.verify_ssl)
+
+if __name__ == '__main__':
+    import sys
+    print(sys.argv)
