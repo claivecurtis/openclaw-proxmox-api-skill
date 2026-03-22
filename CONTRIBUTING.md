@@ -1,38 +1,52 @@
 # Contributing
 
-Thank you for your interest in contributing to this project! We welcome contributions from everyone.
+We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's:
 
-## How to Contribute
+- Reporting a bug
+- Discussing the current state of the code
+- Submitting a fix
+- Proposing new features
+- Becoming a maintainer
 
-1. **Fork the repository** and create a feature branch from `main`.
-2. **Make your changes** and ensure they follow the project's coding standards.
-3. **Test your changes** thoroughly.
-4. **Submit a pull request** with a clear description of your changes.
+## We Develop with Github
 
-## Pull Request Best Practices
+We use github to host code, to track issues and feature requests, as well as accept pull requests.
 
-| Aspect | Best Practice | Why |
-|--------|---------------|-----|
-| **Title** | Clear, concise, starts with verb (e.g., "Add VM backup feature") | Easy scanning in PR list |
-| **Description** | Detailed explanation, links to issues, screenshots if UI | Context for reviewers |
-| **Commits** | Logical, squashed if needed; meaningful messages | Clean history |
-| **Branch** | Feature branch from main, named descriptively (e.g., feature/vm-backup) | Isolation and clarity |
-| **Testing** | All tests pass; new tests for features; manual testing noted | Ensures quality |
-| **Linting** | Code style checks pass (flake8) | Consistency |
-| **Dependencies** | Updated requirements.txt if added; no breaking changes | Compatibility |
-| **Documentation** | Updated README/SKILL.md if needed; inline comments | Maintainability |
-| **Security** | No hardcoded secrets; reviewed for vulnerabilities | Safety |
-| **Size** | Small, focused changes; split large PRs | Easier review |
-| **Review** | Requested reviewers; addressed feedback promptly | Collaboration |
+## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
 
-## Reporting Issues
+Pull requests are the best way to propose changes to the codebase (we use [Github Flow](https://guides.github.com/introduction/flow/index.html)). We actively welcome your pull requests:
 
-If you find a bug or have a feature request, please open an issue on GitHub. Provide as much detail as possible, including steps to reproduce the issue.
+1. Fork the repo and create your branch from `main`.
+2. If you've added code that should be tested, add tests.
+3. If you've changed APIs, update the documentation.
+4. Ensure the test suite passes.
+5. Make sure your code lints.
+6. Issue that pull request!
 
-## Code of Conduct
+## Any contributions you make will be under the MIT Software License
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Questions
+## Report bugs using Github's [issues](https://github.com/briandk/transcriptase-atom/issues)
 
-If you have questions, feel free to open an issue or contact the maintainers.
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](); it's that easy!
+
+## Write bug reports with detail, background, and sample code
+
+**Great Bug Reports** tend to have:
+
+- A quick summary and/or background
+- Steps to reproduce
+  - Be specific!
+  - Give sample code if you can.
+- What you expected would happen
+- What actually happens
+- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
+
+## License
+
+By contributing, you agree that your contributions will be licensed under its MIT License.
+
+## References
+
+This document was adapted from the open-source contribution guidelines for [Facebook's Draft](https://github.com/facebook-draft-js/blob/a9316a723f9e918afde44dea68b5f9f39b7d9b00/CONTRIBUTING.md)
